@@ -1,0 +1,625 @@
+{
+  "properties": {
+    "description": "GridPulse daily batch ingestion (DESIGN D8). Scheduled 13:15 UTC = 08:15 EST, after IESO posts yesterday. Re-runnable for any run_date: bronze replaces the rows of the files it re-copies, silver and gold are rebuilt.",
+    "activities": [
+      {
+        "name": "set_run_date",
+        "type": "SetVariable",
+        "dependsOn": [],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "variableName": "v_run_date",
+          "value": {
+            "value": "@if(empty(pipeline().parameters.run_date), formatDateTime(utcNow(), 'yyyy-MM-dd'), pipeline().parameters.run_date)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "set_data_day",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "set_run_date",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "variableName": "v_data_day",
+          "value": {
+            "value": "@formatDateTime(addDays(variables('v_run_date'), -1), 'yyyy-MM-dd')",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "set_month_start",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "set_data_day",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "variableName": "v_month_start",
+          "value": {
+            "value": "@formatDateTime(startOfMonth(variables('v_data_day')), 'yyyy-MM-dd')",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "cp_ieso_demand",
+        "description": "S1: IESO PUB_Demand of the year that holds yesterday (the unsuffixed name is IESO's newest version).",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "set_month_start",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.02:00:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 120,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "BinarySource",
+            "storeSettings": {
+              "type": "HttpReadSettings",
+              "requestMethod": "GET"
+            },
+            "formatSettings": {
+              "type": "BinaryReadSettings"
+            },
+            "datasetSettings": {
+              "annotations": [],
+              "type": "Binary",
+              "typeProperties": {
+                "location": {
+                  "type": "HttpServerLocation",
+                  "relativeUrl": {
+                    "value": "@concat('PUB_Demand_', substring(variables('v_data_day'), 0, 4), '.csv')",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "externalReferences": {
+                "connection": "{{CONN_IESO_HTTP}}"
+              }
+            }
+          },
+          "sink": {
+            "type": "BinarySink",
+            "storeSettings": {
+              "type": "LakehouseWriteSettings"
+            },
+            "datasetSettings": {
+              "annotations": [],
+              "linkedService": {
+                "name": "lh_gridpulse",
+                "properties": {
+                  "annotations": [],
+                  "type": "Lakehouse",
+                  "typeProperties": {
+                    "workspaceId": "{{WORKSPACE_ID}}",
+                    "artifactId": "{{LAKEHOUSE_ID}}",
+                    "rootFolder": "Files"
+                  }
+                }
+              },
+              "type": "Binary",
+              "typeProperties": {
+                "location": {
+                  "type": "LakehouseLocation",
+                  "folderPath": "bronze/ieso",
+                  "fileName": {
+                    "value": "@concat('PUB_Demand_', substring(variables('v_data_day'), 0, 4), '.csv')",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          },
+          "enableStaging": false
+        }
+      },
+      {
+        "name": "cp_openmeteo_history",
+        "description": "S2: Open-Meteo Historical Forecast API, yesterday's month up to yesterday.",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "set_month_start",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.02:00:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 120,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "BinarySource",
+            "storeSettings": {
+              "type": "HttpReadSettings",
+              "requestMethod": "GET"
+            },
+            "formatSettings": {
+              "type": "BinaryReadSettings"
+            },
+            "datasetSettings": {
+              "annotations": [],
+              "type": "Binary",
+              "typeProperties": {
+                "location": {
+                  "type": "HttpServerLocation",
+                  "relativeUrl": {
+                    "value": "@concat('v1/forecast?{{OPENMETEO_QUERY}}&start_date=', variables('v_month_start'), '&end_date=', variables('v_data_day'))",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "externalReferences": {
+                "connection": "{{CONN_OPENMETEO_HIST}}"
+              }
+            }
+          },
+          "sink": {
+            "type": "BinarySink",
+            "storeSettings": {
+              "type": "LakehouseWriteSettings"
+            },
+            "datasetSettings": {
+              "annotations": [],
+              "linkedService": {
+                "name": "lh_gridpulse",
+                "properties": {
+                  "annotations": [],
+                  "type": "Lakehouse",
+                  "typeProperties": {
+                    "workspaceId": "{{WORKSPACE_ID}}",
+                    "artifactId": "{{LAKEHOUSE_ID}}",
+                    "rootFolder": "Files"
+                  }
+                }
+              },
+              "type": "Binary",
+              "typeProperties": {
+                "location": {
+                  "type": "LakehouseLocation",
+                  "folderPath": "bronze/openmeteo",
+                  "fileName": {
+                    "value": "@concat(substring(variables('v_data_day'), 0, 7), '.json')",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          },
+          "enableStaging": false
+        }
+      },
+      {
+        "name": "cp_openmeteo_forecast",
+        "description": "S2: Open-Meteo Forecast API, next 3 days, input of tomorrow's forecast.",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "set_month_start",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.02:00:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 120,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "BinarySource",
+            "storeSettings": {
+              "type": "HttpReadSettings",
+              "requestMethod": "GET"
+            },
+            "formatSettings": {
+              "type": "BinaryReadSettings"
+            },
+            "datasetSettings": {
+              "annotations": [],
+              "type": "Binary",
+              "typeProperties": {
+                "location": {
+                  "type": "HttpServerLocation",
+                  "relativeUrl": {
+                    "value": "@concat('v1/forecast?{{OPENMETEO_QUERY}}&forecast_days=3')",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "externalReferences": {
+                "connection": "{{CONN_OPENMETEO_FC}}"
+              }
+            }
+          },
+          "sink": {
+            "type": "BinarySink",
+            "storeSettings": {
+              "type": "LakehouseWriteSettings"
+            },
+            "datasetSettings": {
+              "annotations": [],
+              "linkedService": {
+                "name": "lh_gridpulse",
+                "properties": {
+                  "annotations": [],
+                  "type": "Lakehouse",
+                  "typeProperties": {
+                    "workspaceId": "{{WORKSPACE_ID}}",
+                    "artifactId": "{{LAKEHOUSE_ID}}",
+                    "rootFolder": "Files"
+                  }
+                }
+              },
+              "type": "Binary",
+              "typeProperties": {
+                "location": {
+                  "type": "LakehouseLocation",
+                  "folderPath": "bronze/openmeteo_forecast",
+                  "fileName": {
+                    "value": "@concat(variables('v_run_date'), '.json')",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          },
+          "enableStaging": false
+        }
+      },
+      {
+        "name": "fe_sql_reference",
+        "description": "S3: Azure SQL dbo.sites/customers/meters to bronze_<table> (overwrite).",
+        "type": "ForEach",
+        "dependsOn": [
+          {
+            "activity": "set_month_start",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "items": {
+            "value": "@createArray('sites', 'customers', 'meters')",
+            "type": "Expression"
+          },
+          "isSequential": false,
+          "batchCount": 3,
+          "activities": [
+            {
+              "name": "cp_sql_table",
+              "type": "Copy",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.02:00:00",
+                "retry": 2,
+                "retryIntervalInSeconds": 120,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "source": {
+                  "type": "AzureSqlSource",
+                  "queryTimeout": "00:10:00",
+                  "partitionOption": "None",
+                  "datasetSettings": {
+                    "annotations": [],
+                    "type": "AzureSqlTable",
+                    "schema": [],
+                    "typeProperties": {
+                      "schema": "dbo",
+                      "table": {
+                        "value": "@item()",
+                        "type": "Expression"
+                      },
+                      "database": "{{SQL_DATABASE}}"
+                    },
+                    "externalReferences": {
+                      "connection": "{{CONN_SQL}}"
+                    }
+                  }
+                },
+                "sink": {
+                  "type": "LakehouseTableSink",
+                  "tableActionOption": "Overwrite",
+                  "datasetSettings": {
+                    "annotations": [],
+                    "linkedService": {
+                      "name": "lh_gridpulse",
+                      "properties": {
+                        "annotations": [],
+                        "type": "Lakehouse",
+                        "typeProperties": {
+                          "workspaceId": "{{WORKSPACE_ID}}",
+                          "artifactId": "{{LAKEHOUSE_ID}}",
+                          "rootFolder": "Tables"
+                        }
+                      }
+                    },
+                    "type": "LakehouseTable",
+                    "schema": [],
+                    "typeProperties": {
+                      "table": {
+                        "value": "@concat('bronze_', item())",
+                        "type": "Expression"
+                      }
+                    }
+                  }
+                },
+                "enableStaging": false
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "nb_bronze",
+        "type": "TridentNotebook",
+        "dependsOn": [
+          {
+            "activity": "cp_ieso_demand",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "cp_openmeteo_history",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "cp_openmeteo_forecast",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "fe_sql_reference",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.02:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookId": "{{NB_BRONZE_ID}}",
+          "workspaceId": "{{WORKSPACE_ID}}",
+          "parameters": {
+            "run_date": {
+              "value": {
+                "value": "@variables('v_run_date')",
+                "type": "Expression"
+              },
+              "type": "string"
+            },
+            "full_refresh": {
+              "value": false,
+              "type": "bool"
+            }
+          }
+        }
+      },
+      {
+        "name": "nb_silver",
+        "type": "TridentNotebook",
+        "dependsOn": [
+          {
+            "activity": "nb_bronze",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.02:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookId": "{{NB_SILVER_ID}}",
+          "workspaceId": "{{WORKSPACE_ID}}",
+          "parameters": {
+            "run_date": {
+              "value": {
+                "value": "@variables('v_run_date')",
+                "type": "Expression"
+              },
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "nb_gold",
+        "type": "TridentNotebook",
+        "dependsOn": [
+          {
+            "activity": "nb_silver",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.02:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookId": "{{NB_GOLD_ID}}",
+          "workspaceId": "{{WORKSPACE_ID}}",
+          "parameters": {
+            "run_date": {
+              "value": {
+                "value": "@variables('v_run_date')",
+                "type": "Expression"
+              },
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "nb_predict",
+        "type": "TridentNotebook",
+        "dependsOn": [
+          {
+            "activity": "nb_gold",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.02:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookId": "{{NB_PREDICT_ID}}",
+          "workspaceId": "{{WORKSPACE_ID}}",
+          "parameters": {
+            "run_date": {
+              "value": {
+                "value": "@variables('v_run_date')",
+                "type": "Expression"
+              },
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "mail_failure",
+        "type": "Office365Outlook",
+        "description": "Failure alert. The Office 365 Outlook connection uses OAuth, created once in the UI (con_outlook_alerts).",
+        "dependsOn": [
+          {
+            "activity": "nb_predict",
+            "dependencyConditions": [
+              "Failed",
+              "Skipped"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.00:10:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "inputs": {
+            "method": "post",
+            "path": "/v2/Mail",
+            "body": {
+              "To": "{{ALERT_TO}}",
+              "Subject": "GridPulse @{pipeline().Pipeline} FAILED (run_date @{variables('v_run_date')})",
+              "Body": "<p>Pipeline <b>@{pipeline().Pipeline}</b> failed or skipped a step.</p><p>Run id: @{pipeline().RunId}<br>run_date: @{variables('v_run_date')}</p><p>Check the Monitor hub for the failing activity and the table silver_dq_results for data-quality results.</p>",
+              "Importance": "High"
+            }
+          }
+        },
+        "externalReferences": {
+          "connection": "{{CONN_OUTLOOK}}"
+        }
+      },
+      {
+        "name": "fail_pipeline",
+        "type": "Fail",
+        "dependsOn": [
+          {
+            "activity": "mail_failure",
+            "dependencyConditions": [
+              "Succeeded",
+              "Failed"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "message": {
+            "value": "@concat('GridPulse run failed for run_date ', variables('v_run_date'))",
+            "type": "Expression"
+          },
+          "errorCode": "GRIDPULSE_RUN_FAILED"
+        }
+      }
+    ],
+    "parameters": {
+      "run_date": {
+        "type": "string",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "v_run_date": {
+        "type": "String"
+      },
+      "v_data_day": {
+        "type": "String"
+      },
+      "v_month_start": {
+        "type": "String"
+      }
+    },
+    "annotations": [
+      "gridpulse",
+      "batch"
+    ]
+  }
+}

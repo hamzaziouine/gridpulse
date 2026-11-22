@@ -15,6 +15,8 @@ $Cfg = [ordered]@{
     SqlDatabase    = 'sqldb-hz2611-gridpulse'
     SqlAdminUser   = 'gpadmin'
     SqlPwdSecret   = 'sql-gpadmin-password'
+    SaltSecret     = 'customer-hash-salt'      # read by nb_silver (pseudonymisation, D18)
+    EventSecret    = 'es-meters-conn'          # Eventstream custom endpoint, set by hand (UI copy)
     Tags           = @('project=cdda-gridpulse', 'owner=hamza.ziouine', 'course=CDDA-2627')
     # Resource groups that belong to Nacir's other courses: never touched by any script.
     Protected      = @('TP6', 'tp1')

@@ -1,0 +1,529 @@
+{
+  "properties": {
+    "description": "GridPulse one-off backfill: every IESO year and Open-Meteo month since 2019, full bronze refresh, silver, gold, then model training (nb_forecast). Safe to rerun.",
+    "activities": [
+      {
+        "name": "set_run_date",
+        "type": "SetVariable",
+        "dependsOn": [],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "variableName": "v_run_date",
+          "value": {
+            "value": "@formatDateTime(utcNow(), 'yyyy-MM-dd')",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "fe_ieso_years",
+        "type": "ForEach",
+        "dependsOn": [
+          {
+            "activity": "set_run_date",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "description": "S1: every year from first_year to the current year.",
+        "typeProperties": {
+          "items": {
+            "value": "@range(pipeline().parameters.first_year, pipeline().parameters.year_count)",
+            "type": "Expression"
+          },
+          "isSequential": false,
+          "batchCount": 4,
+          "activities": [
+            {
+              "name": "cp_ieso_year",
+              "description": "One year of IESO PUB_Demand.",
+              "type": "Copy",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.02:00:00",
+                "retry": 2,
+                "retryIntervalInSeconds": 120,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "source": {
+                  "type": "BinarySource",
+                  "storeSettings": {
+                    "type": "HttpReadSettings",
+                    "requestMethod": "GET"
+                  },
+                  "formatSettings": {
+                    "type": "BinaryReadSettings"
+                  },
+                  "datasetSettings": {
+                    "annotations": [],
+                    "type": "Binary",
+                    "typeProperties": {
+                      "location": {
+                        "type": "HttpServerLocation",
+                        "relativeUrl": {
+                          "value": "@concat('PUB_Demand_', string(item()), '.csv')",
+                          "type": "Expression"
+                        }
+                      }
+                    },
+                    "externalReferences": {
+                      "connection": "{{CONN_IESO_HTTP}}"
+                    }
+                  }
+                },
+                "sink": {
+                  "type": "BinarySink",
+                  "storeSettings": {
+                    "type": "LakehouseWriteSettings"
+                  },
+                  "datasetSettings": {
+                    "annotations": [],
+                    "linkedService": {
+                      "name": "lh_gridpulse",
+                      "properties": {
+                        "annotations": [],
+                        "type": "Lakehouse",
+                        "typeProperties": {
+                          "workspaceId": "{{WORKSPACE_ID}}",
+                          "artifactId": "{{LAKEHOUSE_ID}}",
+                          "rootFolder": "Files"
+                        }
+                      }
+                    },
+                    "type": "Binary",
+                    "typeProperties": {
+                      "location": {
+                        "type": "LakehouseLocation",
+                        "folderPath": "bronze/ieso",
+                        "fileName": {
+                          "value": "@concat('PUB_Demand_', string(item()), '.csv')",
+                          "type": "Expression"
+                        }
+                      }
+                    }
+                  }
+                },
+                "enableStaging": false
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "fe_openmeteo_months",
+        "type": "ForEach",
+        "dependsOn": [
+          {
+            "activity": "set_run_date",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "description": "S2: one request per month, sequential, far below Open-Meteo's limits.",
+        "typeProperties": {
+          "items": {
+            "value": "@range(0, pipeline().parameters.month_count)",
+            "type": "Expression"
+          },
+          "isSequential": true,
+          "activities": [
+            {
+              "name": "cp_openmeteo_month",
+              "description": "One calendar month of the Historical Forecast API (capped at yesterday).",
+              "type": "Copy",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.02:00:00",
+                "retry": 2,
+                "retryIntervalInSeconds": 120,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "source": {
+                  "type": "BinarySource",
+                  "storeSettings": {
+                    "type": "HttpReadSettings",
+                    "requestMethod": "GET"
+                  },
+                  "formatSettings": {
+                    "type": "BinaryReadSettings"
+                  },
+                  "datasetSettings": {
+                    "annotations": [],
+                    "type": "Binary",
+                    "typeProperties": {
+                      "location": {
+                        "type": "HttpServerLocation",
+                        "relativeUrl": {
+                          "value": "@concat('v1/forecast?{{OPENMETEO_QUERY}}&start_date=', formatDateTime(addToTime(pipeline().parameters.start_month, item(), 'Month'), 'yyyy-MM-dd'), '&end_date=', if(greater(ticks(addDays(addToTime(pipeline().parameters.start_month, add(item(), 1), 'Month'), -1)), ticks(addDays(utcNow(), -1))), formatDateTime(addDays(utcNow(), -1), 'yyyy-MM-dd'), formatDateTime(addDays(addToTime(pipeline().parameters.start_month, add(item(), 1), 'Month'), -1), 'yyyy-MM-dd')))",
+                          "type": "Expression"
+                        }
+                      }
+                    },
+                    "externalReferences": {
+                      "connection": "{{CONN_OPENMETEO_HIST}}"
+                    }
+                  }
+                },
+                "sink": {
+                  "type": "BinarySink",
+                  "storeSettings": {
+                    "type": "LakehouseWriteSettings"
+                  },
+                  "datasetSettings": {
+                    "annotations": [],
+                    "linkedService": {
+                      "name": "lh_gridpulse",
+                      "properties": {
+                        "annotations": [],
+                        "type": "Lakehouse",
+                        "typeProperties": {
+                          "workspaceId": "{{WORKSPACE_ID}}",
+                          "artifactId": "{{LAKEHOUSE_ID}}",
+                          "rootFolder": "Files"
+                        }
+                      }
+                    },
+                    "type": "Binary",
+                    "typeProperties": {
+                      "location": {
+                        "type": "LakehouseLocation",
+                        "folderPath": "bronze/openmeteo",
+                        "fileName": {
+                          "value": "@concat(formatDateTime(addToTime(pipeline().parameters.start_month, item(), 'Month'), 'yyyy-MM'), '.json')",
+                          "type": "Expression"
+                        }
+                      }
+                    }
+                  }
+                },
+                "enableStaging": false
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "fe_sql_reference",
+        "description": "S3: Azure SQL dbo.sites/customers/meters to bronze_<table> (overwrite).",
+        "type": "ForEach",
+        "dependsOn": [
+          {
+            "activity": "set_run_date",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "items": {
+            "value": "@createArray('sites', 'customers', 'meters')",
+            "type": "Expression"
+          },
+          "isSequential": false,
+          "batchCount": 3,
+          "activities": [
+            {
+              "name": "cp_sql_table",
+              "type": "Copy",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.02:00:00",
+                "retry": 2,
+                "retryIntervalInSeconds": 120,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "source": {
+                  "type": "AzureSqlSource",
+                  "queryTimeout": "00:10:00",
+                  "partitionOption": "None",
+                  "datasetSettings": {
+                    "annotations": [],
+                    "type": "AzureSqlTable",
+                    "schema": [],
+                    "typeProperties": {
+                      "schema": "dbo",
+                      "table": {
+                        "value": "@item()",
+                        "type": "Expression"
+                      },
+                      "database": "{{SQL_DATABASE}}"
+                    },
+                    "externalReferences": {
+                      "connection": "{{CONN_SQL}}"
+                    }
+                  }
+                },
+                "sink": {
+                  "type": "LakehouseTableSink",
+                  "tableActionOption": "Overwrite",
+                  "datasetSettings": {
+                    "annotations": [],
+                    "linkedService": {
+                      "name": "lh_gridpulse",
+                      "properties": {
+                        "annotations": [],
+                        "type": "Lakehouse",
+                        "typeProperties": {
+                          "workspaceId": "{{WORKSPACE_ID}}",
+                          "artifactId": "{{LAKEHOUSE_ID}}",
+                          "rootFolder": "Tables"
+                        }
+                      }
+                    },
+                    "type": "LakehouseTable",
+                    "schema": [],
+                    "typeProperties": {
+                      "table": {
+                        "value": "@concat('bronze_', item())",
+                        "type": "Expression"
+                      }
+                    }
+                  }
+                },
+                "enableStaging": false
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "nb_bronze",
+        "type": "TridentNotebook",
+        "dependsOn": [
+          {
+            "activity": "fe_ieso_years",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "fe_openmeteo_months",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "fe_sql_reference",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.02:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookId": "{{NB_BRONZE_ID}}",
+          "workspaceId": "{{WORKSPACE_ID}}",
+          "parameters": {
+            "run_date": {
+              "value": {
+                "value": "@variables('v_run_date')",
+                "type": "Expression"
+              },
+              "type": "string"
+            },
+            "full_refresh": {
+              "value": true,
+              "type": "bool"
+            }
+          }
+        }
+      },
+      {
+        "name": "nb_silver",
+        "type": "TridentNotebook",
+        "dependsOn": [
+          {
+            "activity": "nb_bronze",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.02:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookId": "{{NB_SILVER_ID}}",
+          "workspaceId": "{{WORKSPACE_ID}}",
+          "parameters": {
+            "run_date": {
+              "value": {
+                "value": "@variables('v_run_date')",
+                "type": "Expression"
+              },
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "nb_gold",
+        "type": "TridentNotebook",
+        "dependsOn": [
+          {
+            "activity": "nb_silver",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.02:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookId": "{{NB_GOLD_ID}}",
+          "workspaceId": "{{WORKSPACE_ID}}",
+          "parameters": {
+            "run_date": {
+              "value": {
+                "value": "@variables('v_run_date')",
+                "type": "Expression"
+              },
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "nb_forecast",
+        "type": "TridentNotebook",
+        "dependsOn": [
+          {
+            "activity": "nb_gold",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.02:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookId": "{{NB_FORECAST_ID}}",
+          "workspaceId": "{{WORKSPACE_ID}}",
+          "parameters": {
+            "run_date": {
+              "value": {
+                "value": "@variables('v_run_date')",
+                "type": "Expression"
+              },
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "mail_failure",
+        "type": "Office365Outlook",
+        "description": "Failure alert. The Office 365 Outlook connection uses OAuth, created once in the UI (con_outlook_alerts).",
+        "dependsOn": [
+          {
+            "activity": "nb_forecast",
+            "dependencyConditions": [
+              "Failed",
+              "Skipped"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.00:10:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "inputs": {
+            "method": "post",
+            "path": "/v2/Mail",
+            "body": {
+              "To": "{{ALERT_TO}}",
+              "Subject": "GridPulse @{pipeline().Pipeline} FAILED (run_date @{variables('v_run_date')})",
+              "Body": "<p>Pipeline <b>@{pipeline().Pipeline}</b> failed or skipped a step.</p><p>Run id: @{pipeline().RunId}<br>run_date: @{variables('v_run_date')}</p><p>Check the Monitor hub for the failing activity and the table silver_dq_results for data-quality results.</p>",
+              "Importance": "High"
+            }
+          }
+        },
+        "externalReferences": {
+          "connection": "{{CONN_OUTLOOK}}"
+        }
+      },
+      {
+        "name": "fail_pipeline",
+        "type": "Fail",
+        "dependsOn": [
+          {
+            "activity": "mail_failure",
+            "dependencyConditions": [
+              "Succeeded",
+              "Failed"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "message": {
+            "value": "@concat('GridPulse run failed for run_date ', variables('v_run_date'))",
+            "type": "Expression"
+          },
+          "errorCode": "GRIDPULSE_RUN_FAILED"
+        }
+      }
+    ],
+    "parameters": {
+      "first_year": {
+        "type": "int",
+        "defaultValue": 2019
+      },
+      "year_count": {
+        "type": "int",
+        "defaultValue": "{{BACKFILL_YEARS}}"
+      },
+      "start_month": {
+        "type": "string",
+        "defaultValue": "2019-01-01"
+      },
+      "month_count": {
+        "type": "int",
+        "defaultValue": "{{BACKFILL_MONTHS}}"
+      }
+    },
+    "variables": {
+      "v_run_date": {
+        "type": "String"
+      }
+    },
+    "annotations": [
+      "gridpulse",
+      "backfill"
+    ]
+  }
+}

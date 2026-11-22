@@ -2,7 +2,8 @@
 #
 # Creates in rg-hz2611-cdda (germanywestcentral):
 #   1. Key Vault kv-hz2611-cdda (RBAC mode, purge protection off for student cleanup, soft delete 7 d)
-#   2. SQL admin password generated once, stored ONLY in Key Vault (secret sql-gpadmin-password)
+#   2. SQL admin password generated once, stored ONLY in Key Vault (secret sql-gpadmin-password),
+#      and the pseudonymisation salt customer-hash-salt read by nb_silver (generated once, kept)
 #   3. Azure SQL logical server sql-hz2611-cdda (TLS 1.2 minimum, Entra admin optional)
 #   4. Firewall: Azure services (Fabric pipelines) + the current public IP of this laptop
 #   5. Database sqldb-hz2611-gridpulse on the FREE offer (serverless GP Gen5 2 vCore,
@@ -62,6 +63,27 @@ if (-not $WhatIf) {
         Write-Host 'generated and stored'
     }
 } else { Plan "generate password, store in $($Cfg.KeyVault)/$($Cfg.SqlPwdSecret)" | Out-Null }
+
+# 2b. Pseudonymisation salt (DESIGN D18): generated once, never rotated by this script --------
+Step "Secret $($Cfg.SaltSecret)"
+if (-not $WhatIf) {
+    $r = Invoke-AzQuiet keyvault secret show --vault-name $Cfg.KeyVault -n $Cfg.SaltSecret `
+        --query id -o tsv --only-show-errors
+    if ($r.ok -and $r.text) {
+        Write-Host 'exists (kept: a new salt would change every customer_hash)'
+    } else {
+        $bytes = New-Object byte[] 32
+        [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+        $salt = -join ($bytes | ForEach-Object { $_.ToString('x2') })
+        $tmp = New-TemporaryFile
+        try {
+            Set-Content -Path $tmp -Value $salt -NoNewline -Encoding ascii
+            Invoke-Az keyvault secret set --vault-name $Cfg.KeyVault -n $Cfg.SaltSecret `
+                --file $tmp --encoding utf-8 --content-type 'text/plain' | Out-Null
+        } finally { Remove-Item $tmp -Force; $salt = $null }
+        Write-Host 'generated and stored'
+    }
+} else { Plan "generate a 32-byte salt, store in $($Cfg.KeyVault)/$($Cfg.SaltSecret)" | Out-Null }
 
 # 3. SQL logical server ------------------------------------------------------------------------
 Step "SQL server $($Cfg.SqlServer)"
