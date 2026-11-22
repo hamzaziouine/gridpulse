@@ -82,7 +82,10 @@ charge and stops itself above 28 GB. MLflow runs go to `mlruns/` (git-ignored).
 
 ## Deploy (in this order)
 
-1. **Azure foundation** (after the proposal is sent; Contributor on `rg-hz2611-cdda`):
+1. **Azure foundation** (after the proposal is sent). Nacir (subscription Owner) first grants the
+   Data Engineer, at the scope of `rg-hz2611-cdda`: Contributor, Resource Policy Contributor and
+   Key Vault Secrets Officer (the vault is in RBAC mode, so its creator cannot write secrets
+   without that role). Then
    `powershell -File infra\azure\deploy.ps1` creates the Key Vault (SQL admin password and the
    pseudonymisation salt are generated there and never printed), the SQL server (TLS 1.2,
    firewall) and the free serverless database. Then

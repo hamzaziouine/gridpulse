@@ -11,6 +11,10 @@
 #
 # Prerequisites (PLAN 5.3, run by Nacir as Owner): the caller has Contributor on the RG and
 # "Key Vault Secrets Officer" on the vault (or on the RG). Proposal must be SENT before running.
+# Run this BEFORE policy_assignments.ps1: the SQL server is created untagged, then tagged, and a
+# require-tag deny policy would refuse the first call (policy_assignments.ps1 checks this).
+# The Key Vault is in RBAC mode, so creating it gives the caller no right to write secrets: the
+# Secrets Officer role must be granted at RG scope before the first run.
 #
 #   powershell -File infra\azure\deploy.ps1 [-EntraAdminObjectId <guid> -EntraAdminName <name>]
 #   powershell -File infra\azure\deploy.ps1 -WhatIf      # prints the plan, creates nothing

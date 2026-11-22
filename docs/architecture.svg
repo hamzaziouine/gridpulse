@@ -1,0 +1,384 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000">
+  <title>GridPulse architecture: Azure and Microsoft Fabric, Germany West Central</title>
+  <style>
+    text { font-family: "Segoe UI", Arial, sans-serif; fill: #111827; }
+    .title { font-size: 24px; font-weight: 700; }
+    .sub { font-size: 12.5px; fill: #374151; }
+    .frame { font-size: 13px; font-weight: 700; }
+    .h { font-size: 13.5px; font-weight: 700; }
+    .b { font-size: 11px; }
+    .s { font-size: 10.5px; }
+    .bb { font-size: 11px; font-weight: 700; }
+    .tb { font-size: 10.5px; }
+    .n { font-size: 10.5px; font-style: italic; fill: #4b5563; }
+    .lbl { font-size: 10.5px; fill: #1f2937; paint-order: stroke; stroke: #ffffff; stroke-width: 3px; stroke-linejoin: round; }
+    .lblp { font-size: 10.5px; fill: #6d28d9; paint-order: stroke; stroke: #ffffff; stroke-width: 3px; stroke-linejoin: round; }
+    .lblg { font-size: 10.5px; fill: #047857; paint-order: stroke; stroke: #ffffff; stroke-width: 3px; stroke-linejoin: round; }
+    .flow { stroke: #374151; stroke-width: 1.7; fill: none; marker-end: url(#a); }
+    .both { stroke: #374151; stroke-width: 1.7; fill: none; marker-end: url(#a); marker-start: url(#a); }
+    .ctl { stroke: #6d28d9; stroke-width: 1.5; stroke-dasharray: 6 4; fill: none; marker-end: url(#ap); }
+    .run { stroke: #047857; stroke-width: 1.5; stroke-dasharray: 6 4; fill: none; marker-end: url(#ag); }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#374151"/>
+    </marker>
+    <marker id="ap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6d28d9"/>
+    </marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#047857"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="1000" fill="#ffffff"/>
+
+  <!-- Header -->
+  <text x="20" y="32" class="title">GridPulse: data platform architecture (Azure + Microsoft Fabric)</text>
+  <text x="20" y="55" class="sub">Region: Germany West Central for every resource. Status 2026-11-22: code tested locally; in the cloud only rg-hz2611-cdda and its budget exist, all other items are not created yet.</text>
+
+  <!-- Legend -->
+  <g>
+    <line x1="1215" y1="22" x2="1255" y2="22" class="flow"/>
+    <text x="1262" y="26" class="s">data flow</text>
+    <line x1="1325" y1="22" x2="1365" y2="22" class="run"/>
+    <text x="1372" y="26" class="s">runs / triggers</text>
+    <line x1="1462" y1="22" x2="1502" y2="22" class="ctl"/>
+    <text x="1509" y="26" class="s">secret read</text>
+    <rect x="1215" y="38" width="12" height="12" fill="#dbeafe" stroke="#1d4ed8"/><text x="1231" y="48" class="s">Azure</text>
+    <rect x="1272" y="38" width="12" height="12" fill="#d1fae5" stroke="#047857"/><text x="1288" y="48" class="s">Fabric</text>
+    <rect x="1333" y="38" width="12" height="12" fill="#f3f4f6" stroke="#6b7280"/><text x="1349" y="48" class="s">Public web</text>
+    <rect x="1416" y="38" width="12" height="12" fill="#ffedd5" stroke="#c2410c"/><text x="1432" y="48" class="s">Laptop</text>
+    <rect x="1482" y="38" width="12" height="12" fill="#ede9fe" stroke="#6d28d9"/><text x="1498" y="48" class="s">Governance</text>
+  </g>
+
+  <!-- ===================== LEFT COLUMN: SOURCES ===================== -->
+  <!-- Laptop: S4 -->
+  <rect x="12" y="72" width="248" height="180" rx="8" fill="#fff7ed" stroke="#c2410c" stroke-dasharray="6 4"/>
+  <text x="22" y="90" class="frame" fill="#c2410c" style="fill:#c2410c">Team laptop (outside Azure)</text>
+  <rect x="26" y="98" width="220" height="144" rx="6" fill="#ffedd5" stroke="#c2410c"/>
+  <text x="36" y="117" class="h">S4 Smart-meter simulator</text>
+  <text x="36" y="135" class="s">realtime/simulator.py (Python)</text>
+  <text x="36" y="150" class="s">50 meters, JSON events, 10 events/s</text>
+  <text x="36" y="165" class="s">real Ontario daily shape + noise</text>
+  <text x="36" y="180" class="s">anomaly injection via anomaly.json</text>
+  <text x="36" y="200" class="s">secret es-meters-conn read from</text>
+  <text x="36" y="215" class="s">Key Vault (DefaultAzureCredential)</text>
+
+  <!-- Public web: S1, S2 -->
+  <rect x="12" y="268" width="248" height="205" rx="8" fill="#f9fafb" stroke="#6b7280" stroke-dasharray="6 4"/>
+  <text x="22" y="286" class="frame" style="fill:#4b5563">Public web (external sources)</text>
+  <rect x="26" y="294" width="220" height="80" rx="6" fill="#f3f4f6" stroke="#6b7280"/>
+  <text x="36" y="313" class="h">S1 IESO PUB_Demand</text>
+  <text x="36" y="331" class="s">hourly Ontario demand, CSV over HTTP</text>
+  <text x="36" y="346" class="s">68,784 rows, 2019 to 2026</text>
+  <text x="36" y="361" class="s">fixed EST, hour-ending 1..24</text>
+  <rect x="26" y="384" width="220" height="80" rx="6" fill="#f3f4f6" stroke="#6b7280"/>
+  <text x="36" y="403" class="h">S2 Open-Meteo APIs</text>
+  <text x="36" y="421" class="s">Historical Forecast + Forecast API</text>
+  <text x="36" y="436" class="s">JSON, 5 cities, 9 variables</text>
+  <text x="36" y="451" class="s">343,920 city-hours, CC BY 4.0</text>
+
+  <!-- Azure resource group -->
+  <rect x="12" y="489" width="248" height="500" rx="8" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.5" stroke-dasharray="7 4"/>
+  <text x="22" y="508" class="frame" style="fill:#1d4ed8">Azure RG rg-hz2611-cdda</text>
+  <text x="22" y="522" class="s" style="fill:#1d4ed8">Germany West Central · Azure for Students</text>
+
+  <rect x="26" y="530" width="220" height="108" rx="6" fill="#dbeafe" stroke="#1d4ed8"/>
+  <text x="36" y="549" class="h">S3 Azure SQL Database</text>
+  <text x="36" y="567" class="s">server sql-hz2611-cdda</text>
+  <text x="36" y="582" class="s">db sqldb-hz2611-gridpulse</text>
+  <text x="36" y="597" class="s">free offer, serverless, TLS 1.2 min</text>
+  <text x="36" y="612" class="s">10 sites, 50 meters, 50 customers</text>
+  <text x="36" y="627" class="s">fake PII, 5 classified columns</text>
+
+  <rect x="26" y="650" width="220" height="110" rx="6" fill="#ede9fe" stroke="#6d28d9"/>
+  <text x="36" y="669" class="h">Key Vault kv-hz2611-cdda</text>
+  <text x="36" y="687" class="s">RBAC mode, soft delete 7 days</text>
+  <text x="36" y="703" class="s">secrets:</text>
+  <text x="46" y="718" class="s">sql-gpadmin-password</text>
+  <text x="46" y="733" class="s">customer-hash-salt</text>
+  <text x="46" y="748" class="s">es-meters-conn</text>
+
+  <rect x="26" y="772" width="220" height="100" rx="6" fill="#ede9fe" stroke="#6d28d9"/>
+  <text x="36" y="791" class="h">Azure Policy</text>
+  <text x="36" y="809" class="s">allowed regions (inherited from the</text>
+  <text x="36" y="824" class="s">subscription, 5 EU regions)</text>
+  <text x="36" y="839" class="s">require-tag-project (deny)</text>
+  <text x="36" y="854" class="s">require-tag-owner (deny)</text>
+
+  <rect x="26" y="884" width="220" height="95" rx="6" fill="#ede9fe" stroke="#6d28d9"/>
+  <text x="36" y="903" class="h">Budget budget-cdda-20usd</text>
+  <text x="36" y="921" class="s">$20 per month on the RG</text>
+  <text x="36" y="936" class="s">mail at 50 % and 100 % actual,</text>
+  <text x="36" y="951" class="s">100 % forecast</text>
+  <text x="36" y="966" class="s">to Hamza and Nacir</text>
+
+  <!-- ===================== FABRIC WORKSPACE ===================== -->
+  <rect x="275" y="70" width="1315" height="675" rx="10" fill="#f0fdf4" stroke="#047857" stroke-width="1.8"/>
+  <text x="290" y="91" class="frame" style="fill:#047857">Microsoft Fabric workspace ws_gridpulse<tspan class="s" dx="14" style="font-weight:400;fill:#065f46">·</tspan><tspan class="s" dx="8" style="font-weight:400;fill:#065f46">Nacir's 60-day trial capacity FTL4 (4 CU)</tspan><tspan class="s" dx="8" style="font-weight:400;fill:#065f46">·</tspan><tspan class="s" dx="8" style="font-weight:400;fill:#065f46">Germany West Central</tspan><tspan class="s" dx="8" style="font-weight:400;fill:#065f46">·</tspan><tspan class="s" dx="8" style="font-weight:400;fill:#065f46">not created yet</tspan></text>
+
+  <!-- Real-time band -->
+  <rect x="283" y="100" width="1300" height="146" rx="6" fill="#e0f2fe" fill-opacity="0.55"/>
+  <text x="1580" y="113" class="n" text-anchor="end" style="fill:#0369a1">Real-time path (seconds)</text>
+
+  <rect x="290" y="122" width="265" height="118" rx="6" fill="#d1fae5" stroke="#047857"/>
+  <text x="300" y="141" class="h">Eventstream es_meters</text>
+  <text x="300" y="159" class="b">source: custom endpoint</text>
+  <text x="300" y="174" class="b">(Event Hubs protocol, AMQP over TLS)</text>
+  <text x="300" y="194" class="b">destination: Eventhouse table</text>
+  <text x="300" y="209" class="b">meter_readings, JSON mapping</text>
+  <text x="300" y="229" class="n">demo rate about 10 events/s on FTL4</text>
+
+  <rect x="590" y="122" width="300" height="118" rx="6" fill="#cffafe" stroke="#0e7490"/>
+  <text x="600" y="141" class="h">Eventhouse eh_gridpulse (KQL DB)</text>
+  <text x="600" y="159" class="b">table meter_readings</text>
+  <text x="600" y="174" class="b">ts, meter_id, site_id, kw, voltage, status</text>
+  <text x="600" y="194" class="b">retention 7 days</text>
+  <text x="600" y="209" class="b">streaming ingestion from es_meters</text>
+
+  <rect x="925" y="122" width="300" height="118" rx="6" fill="#cffafe" stroke="#0e7490"/>
+  <text x="935" y="141" class="h">KQL queryset kq_gridpulse</text>
+  <text x="935" y="159" class="b">Q1 kWh per site, 5-min tumbling window</text>
+  <text x="935" y="174" class="b">Q2 site load above its 1 h mean + 3 sd</text>
+  <text x="935" y="189" class="b">Q3 top 5 sites over the last 15 min</text>
+  <text x="935" y="209" class="n">source: realtime/kql/*.kql</text>
+
+  <rect x="1260" y="122" width="320" height="56" rx="6" fill="#fef9c3" stroke="#a16207"/>
+  <text x="1270" y="141" class="h">Real-Time Dashboard rtd_gridpulse</text>
+  <text x="1270" y="160" class="b">tiles from Q1, Q2, Q3, auto-refresh</text>
+
+  <rect x="1260" y="186" width="320" height="54" rx="6" fill="#fee2e2" stroke="#b91c1c"/>
+  <text x="1270" y="205" class="h">Activator act_abnormal_demand</text>
+  <text x="1270" y="224" class="b">Q2 returns rows → alert mail to the team</text>
+
+  <!-- Real-time arrows -->
+  <line x1="246" y1="170" x2="289" y2="170" class="flow"/>
+  <text x="268" y="163" class="lbl" text-anchor="middle">JSON</text>
+  <line x1="555" y1="181" x2="589" y2="181" class="flow"/>
+  <text x="572" y="175" class="lbl" text-anchor="middle">ingest</text>
+  <line x1="890" y1="181" x2="924" y2="181" class="flow"/>
+  <text x="907" y="175" class="lbl" text-anchor="middle">KQL</text>
+  <line x1="1225" y1="150" x2="1259" y2="150" class="flow"/>
+  <text x="1242" y="144" class="lbl" text-anchor="middle">tiles</text>
+  <line x1="1225" y1="213" x2="1259" y2="213" class="flow"/>
+  <text x="1242" y="207" class="lbl" text-anchor="middle">Q2</text>
+
+  <!-- Batch band -->
+  <rect x="283" y="256" width="1300" height="482" rx="6" fill="#ffffff" fill-opacity="0.55"/>
+  <text x="1580" y="272" class="n" text-anchor="end" style="fill:#047857">Batch path (daily, 13:15 UTC)</text>
+
+  <!-- Pipeline -->
+  <rect x="290" y="285" width="265" height="303" rx="6" fill="#d1fae5" stroke="#047857"/>
+  <text x="300" y="305" class="h">Data Factory pipeline</text>
+  <text x="300" y="322" class="h" style="fill:#047857">pl_daily_ingest</text>
+  <text x="300" y="341" class="s">daily at 13:15 UTC (08:15 EST), run_date</text>
+  <text x="300" y="361" class="bb">Copy activities</text>
+  <text x="300" y="376" class="s">1  IESO CSV · con_ieso_http</text>
+  <text x="300" y="391" class="s">2  Open-Meteo history · con_openmeteo_hist</text>
+  <text x="300" y="406" class="s">3  Open-Meteo forecast · con_openmeteo_fc</text>
+  <text x="300" y="421" class="s">4  3 SQL tables · con_sql_gridpulse</text>
+  <text x="300" y="443" class="bb">Notebook activities</text>
+  <text x="300" y="458" class="s">nb_bronze → nb_silver → nb_gold</text>
+  <text x="300" y="473" class="s">→ nb_predict</text>
+  <text x="300" y="495" class="bb">On failure</text>
+  <text x="300" y="510" class="s">Outlook mail (con_outlook_alerts),</text>
+  <text x="300" y="525" class="s">then a Fail activity</text>
+  <text x="300" y="550" class="bb">pl_backfill (one-off)</text>
+  <text x="300" y="565" class="s">all years, full refresh, then nb_forecast</text>
+
+  <!-- Source arrows into the pipeline -->
+  <line x1="246" y1="334" x2="289" y2="334" class="flow"/>
+  <text x="268" y="327" class="lbl" text-anchor="middle">HTTP</text>
+  <line x1="246" y1="424" x2="289" y2="424" class="flow"/>
+  <text x="268" y="417" class="lbl" text-anchor="middle">REST</text>
+  <line x1="246" y1="560" x2="289" y2="560" class="flow"/>
+  <text x="268" y="553" class="lbl" text-anchor="middle">SQL</text>
+
+  <!-- Lakehouse -->
+  <rect x="590" y="285" width="635" height="285" rx="8" fill="#ffffff" stroke="#047857" stroke-width="1.5"/>
+  <text x="602" y="304" class="h">Lakehouse lh_gridpulse (OneLake, Delta tables)</text>
+  <rect x="602" y="313" width="600" height="30" rx="4" fill="#f3f4f6" stroke="#9ca3af"/>
+  <text x="612" y="333" class="s"><tspan font-weight="700">Files/bronze/</tspan>  ieso/PUB_Demand_YYYY.csv · openmeteo/YYYY-MM.json · openmeteo_forecast/YYYY-MM-DD.json  (landing)</text>
+
+  <rect x="602" y="358" width="184" height="202" rx="5" fill="#f6e7d7" stroke="#92400e"/>
+  <text x="611" y="376" class="bb" style="font-size:12px">Bronze: raw, typed</text>
+  <text x="611" y="394" class="tb">bronze_ieso_demand</text>
+  <text x="611" y="408" class="tb">bronze_openmeteo_hourly</text>
+  <text x="611" y="422" class="tb">bronze_openmeteo_forecast</text>
+  <text x="611" y="436" class="tb">bronze_sites</text>
+  <text x="611" y="450" class="tb">bronze_meters</text>
+  <text x="611" y="464" class="tb" style="fill:#b91c1c;font-weight:700">bronze_customers (PII)</text>
+  <text x="611" y="530" class="n">lineage: source_file,</text>
+  <text x="611" y="544" class="n">ingested_at, run_date</text>
+
+  <rect x="810" y="358" width="184" height="202" rx="5" fill="#eef0f3" stroke="#4b5563"/>
+  <text x="819" y="376" class="bb" style="font-size:12px">Silver: clean, conformed</text>
+  <text x="819" y="394" class="tb">silver_demand_hourly</text>
+  <text x="819" y="408" class="tb">silver_weather_city_hourly</text>
+  <text x="819" y="422" class="tb">silver_weather_ontario_hourly</text>
+  <text x="819" y="436" class="tb">silver_demand_weather_hourly</text>
+  <text x="819" y="450" class="tb">silver_weather_forecast_ontario</text>
+  <text x="819" y="464" class="tb">silver_sites, silver_meters</text>
+  <text x="819" y="478" class="tb">silver_customers_pseudo</text>
+  <text x="819" y="492" class="tb">silver_dq_results (17 checks)</text>
+  <text x="819" y="516" class="n">EST to UTC, newest revision,</text>
+  <text x="819" y="530" class="n">weighted weather, HDD/CDD,</text>
+  <text x="819" y="544" class="n">salted SHA-256 customer_hash</text>
+
+  <rect x="1018" y="358" width="184" height="202" rx="5" fill="#fef3c7" stroke="#b45309"/>
+  <text x="1027" y="376" class="bb" style="font-size:12px">Gold: star schema for BI</text>
+  <text x="1027" y="394" class="tb">gold_dim_date, gold_dim_city</text>
+  <text x="1027" y="407" class="tb">gold_dim_site, gold_dim_meter</text>
+  <text x="1027" y="420" class="tb">gold_demand_hourly</text>
+  <text x="1027" y="433" class="tb">gold_demand_daily</text>
+  <text x="1027" y="446" class="tb">gold_demand_monthly</text>
+  <text x="1027" y="459" class="tb">gold_top_peaks</text>
+  <text x="1027" y="472" class="tb">gold_temp_sensitivity</text>
+  <text x="1027" y="485" class="tb">gold_sensitivity_yearly</text>
+  <text x="1027" y="498" class="tb">gold_city_weather_daily</text>
+  <text x="1027" y="511" class="tb">gold_forecast</text>
+  <text x="1027" y="524" class="tb">gold_forecast_eval</text>
+  <text x="1027" y="546" class="n">no PII (customer_hash only)</text>
+
+  <!-- Layer arrows -->
+  <line x1="694" y1="343" x2="694" y2="357" class="flow"/>
+  <line x1="786" y1="459" x2="809" y2="459" class="flow"/>
+  <line x1="994" y1="459" x2="1017" y2="459" class="flow"/>
+
+  <!-- Pipeline writes -->
+  <line x1="555" y1="328" x2="601" y2="328" class="flow"/>
+  <text x="578" y="321" class="lbl" text-anchor="middle">files</text>
+  <line x1="555" y1="421" x2="601" y2="421" class="flow"/>
+  <text x="578" y="414" class="lbl" text-anchor="middle">tables</text>
+
+  <!-- Processing row -->
+  <rect x="590" y="598" width="300" height="137" rx="6" fill="#dcfce7" stroke="#15803d"/>
+  <text x="600" y="617" class="h">Spark notebooks (medallion)</text>
+  <text x="600" y="635" class="s">nb_bronze: Files → bronze tables</text>
+  <text x="600" y="650" class="s">nb_silver: bronze → silver, 17 DQ checks,</text>
+  <text x="600" y="665" class="s">stops before overwriting silver on FAIL</text>
+  <text x="600" y="680" class="s">nb_gold: silver → gold (full recompute)</text>
+  <text x="600" y="700" class="s">env_gridpulse: gridpulse wheel + holidays</text>
+  <text x="600" y="715" class="n">same code tested locally on Spark 3.5</text>
+
+  <rect x="905" y="598" width="155" height="137" rx="6" fill="#dcfce7" stroke="#15803d"/>
+  <text x="914" y="617" class="h">nb_forecast</text>
+  <text x="914" y="635" class="s">LightGBM day-ahead</text>
+  <text x="914" y="649" class="s">baseline: naive 168 h</text>
+  <text x="914" y="666" class="bb">MLflow</text>
+  <text x="914" y="680" class="s">exp_gridpulse_forecast</text>
+  <text x="914" y="694" class="s">model gridpulse_lgbm</text>
+  <text x="914" y="711" class="s">writes gold_forecast,</text>
+  <text x="914" y="725" class="s">gold_forecast_eval</text>
+
+  <rect x="1075" y="598" width="150" height="137" rx="6" fill="#dcfce7" stroke="#15803d"/>
+  <text x="1084" y="617" class="h">nb_predict</text>
+  <text x="1084" y="635" class="s">daily, after nb_gold</text>
+  <text x="1084" y="649" class="s">loads gridpulse_lgbm</text>
+  <text x="1084" y="663" class="s">+ forecast weather</text>
+  <text x="1084" y="680" class="s">scores the 24 hours</text>
+  <text x="1084" y="694" class="s">of tomorrow (EST)</text>
+  <text x="1084" y="711" class="s">appends gold_forecast</text>
+
+  <!-- Processing reads/writes the Lakehouse -->
+  <line x1="700" y1="597" x2="700" y2="571" class="both"/>
+  <text x="710" y="589" class="lbl">read / write Delta</text>
+  <line x1="982" y1="597" x2="982" y2="571" class="both"/>
+  <line x1="1150" y1="597" x2="1150" y2="571" class="both"/>
+
+  <!-- Pipeline runs the notebooks -->
+  <polyline points="440,588 440,650 589,650" class="run"/>
+  <text x="515" y="643" class="lblg" text-anchor="middle">runs</text>
+
+  <!-- Key Vault salt read by nb_silver -->
+  <line x1="246" y1="712" x2="589" y2="712" class="ctl"/>
+  <text x="418" y="705" class="lblp" text-anchor="middle">customer-hash-salt (notebookutils)</text>
+
+  <!-- Consumption: Power BI -->
+  <rect x="1260" y="290" width="320" height="92" rx="6" fill="#fef9c3" stroke="#a16207"/>
+  <text x="1270" y="309" class="h">Semantic model sm_gridpulse</text>
+  <text x="1270" y="327" class="b">Direct Lake on the gold tables</text>
+  <text x="1270" y="342" class="b">(no import refresh step)</text>
+  <text x="1270" y="357" class="b">star schema on date_key, DAX measures</text>
+  <text x="1270" y="372" class="b">KPIs: peak MW, energy GWh, MAPE %</text>
+
+  <rect x="1260" y="398" width="320" height="92" rx="6" fill="#fef9c3" stroke="#a16207"/>
+  <text x="1270" y="417" class="h">Power BI report rpt_gridpulse</text>
+  <text x="1270" y="435" class="b">peaks, weather sensitivity,</text>
+  <text x="1270" y="450" class="b">forecast vs actual, data quality</text>
+  <text x="1270" y="465" class="b">slicers: year, season, city</text>
+  <text x="1270" y="480" class="n">delivered as Fabric report + PBIX</text>
+
+  <rect x="1260" y="508" width="320" height="170" rx="6" fill="#ffffff" stroke="#6b7280"/>
+  <text x="1270" y="527" class="h">Users and decisions</text>
+  <text x="1270" y="546" class="bb">Energy planner (Analyst persona)</text>
+  <text x="1270" y="561" class="b">peaks, weather drivers, forecast quality</text>
+  <text x="1270" y="576" class="b">in rpt_gridpulse</text>
+  <text x="1270" y="596" class="bb">Grid operations analyst</text>
+  <text x="1270" y="611" class="b">abnormal sites on rtd_gridpulse + alert mail</text>
+  <text x="1270" y="631" class="bb">Data engineering team</text>
+  <text x="1270" y="646" class="b">Monitor hub, silver_dq_results,</text>
+  <text x="1270" y="661" class="b">pipeline failure mail</text>
+
+  <rect x="1260" y="690" width="320" height="45" rx="6" fill="#f9fafb" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <text x="1270" y="708" class="bb">Git repository</text>
+  <text x="1270" y="725" class="s">notebooks, KQL, SQL, IaC; Fabric Git sync or fab export</text>
+
+  <line x1="1202" y1="372" x2="1259" y2="345" class="flow"/>
+  <text x="1231" y="352" class="lbl" text-anchor="middle">reads</text>
+  <line x1="1420" y1="382" x2="1420" y2="397" class="flow"/>
+  <line x1="1420" y1="490" x2="1420" y2="507" class="flow"/>
+
+  <!-- ===================== GOVERNANCE BAND ===================== -->
+  <rect x="275" y="757" width="1315" height="232" rx="10" fill="#faf5ff" stroke="#6d28d9" stroke-width="1.5" stroke-dasharray="7 4"/>
+  <text x="290" y="777" class="frame" style="fill:#6d28d9">Security and governance (applies to every layer; Key Vault, Policy and the budget are in the RG on the left)</text>
+
+  <rect x="290" y="788" width="470" height="192" rx="6" fill="#ede9fe" stroke="#6d28d9"/>
+  <text x="300" y="807" class="h">Microsoft Entra ID (UIR tenant): 3 personas, least privilege</text>
+  <text x="300" y="827" class="bb">Admin: Mohamed NACIR</text>
+  <text x="300" y="842" class="b">subscription Owner, Key Vault Administrator, SQL Entra admin,</text>
+  <text x="300" y="857" class="b">Fabric trial owner, workspace Admin</text>
+  <text x="300" y="877" class="bb">Data Engineer: Hamza ZIOUINE</text>
+  <text x="300" y="892" class="b">RG Contributor + Resource Policy Contributor, Key Vault Secrets Officer,</text>
+  <text x="300" y="907" class="b">SQL db_datareader + db_datawriter, workspace Member</text>
+  <text x="300" y="927" class="bb">Analyst: Omar MOUNABBIH</text>
+  <text x="300" y="942" class="b">RG Reader, no Key Vault access, workspace Viewer,</text>
+  <text x="300" y="957" class="b">sees gold only through sm_gridpulse (no PII)</text>
+
+  <rect x="775" y="788" width="265" height="192" rx="6" fill="#ede9fe" stroke="#6d28d9"/>
+  <text x="785" y="807" class="h">Classification (Purview)</text>
+  <text x="785" y="827" class="s">Azure SQL: sensitivity classifications</text>
+  <text x="785" y="842" class="s">on 5 customer columns (001_schema.sql)</text>
+  <text x="785" y="857" class="s">bronze_customers: only PII table in lake</text>
+  <text x="785" y="872" class="s">silver, gold: salted SHA-256 hash only</text>
+  <text x="785" y="887" class="s">OneLake catalog (Govern); sensitivity</text>
+  <text x="785" y="902" class="s">labels only if the tenant has them</text>
+  <text x="785" y="922" class="s">Purview scan of Azure SQL + OneLake:</text>
+  <text x="785" y="937" class="s">designed, not built (no Purview</text>
+  <text x="785" y="952" class="s">account, no Fabric admin rights)</text>
+
+  <rect x="1055" y="788" width="265" height="192" rx="6" fill="#ede9fe" stroke="#6d28d9"/>
+  <text x="1065" y="807" class="h">Monitoring and audit</text>
+  <text x="1065" y="827" class="s">Azure activity log: role changes,</text>
+  <text x="1065" y="842" class="s">resource writes, policy denials</text>
+  <text x="1065" y="857" class="s">Key Vault AuditEvent: diagnostic</text>
+  <text x="1065" y="872" class="s">setting designed, not enabled (cost)</text>
+  <text x="1065" y="887" class="s">Fabric Monitor hub: pipeline and</text>
+  <text x="1065" y="902" class="s">notebook runs</text>
+  <text x="1065" y="917" class="s">silver_dq_results: 17 checks per run</text>
+  <text x="1065" y="932" class="s">pipeline failure mail, Activator mail,</text>
+  <text x="1065" y="947" class="s">budget alerts</text>
+
+  <rect x="1335" y="788" width="245" height="192" rx="6" fill="#ede9fe" stroke="#6d28d9"/>
+  <text x="1345" y="807" class="h">Encryption and network</text>
+  <text x="1345" y="827" class="s">at rest: TDE on Azure SQL, Fabric</text>
+  <text x="1345" y="842" class="s">storage (OneLake, Eventhouse) and</text>
+  <text x="1345" y="857" class="s">Key Vault encrypted by default</text>
+  <text x="1345" y="872" class="s">in transit: TLS 1.2 minimum on SQL,</text>
+  <text x="1345" y="887" class="s">HTTPS and AMQP over TLS elsewhere</text>
+  <text x="1345" y="902" class="s">SQL firewall: Azure services +</text>
+  <text x="1345" y="917" class="s">team IPs; public endpoints, no</text>
+  <text x="1345" y="932" class="s">private link on the trial</text>
+  <text x="1345" y="947" class="n">production: private endpoints</text>
+</svg>

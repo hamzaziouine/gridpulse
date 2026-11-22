@@ -10,6 +10,11 @@ param([switch]$Test)
 . "$PSScriptRoot\common.ps1"
 Assert-Context | Out-Null
 $scope = "/subscriptions/$($Cfg.SubscriptionId)/resourceGroups/$($Cfg.ResourceGroup)"
+# Order matters: deploy.ps1 creates the SQL server untagged and tags it in a second call, which a
+# require-tag deny policy would refuse. Assign the policies only after the foundation exists.
+if (-not (Test-AzExists sql server show -n $Cfg.SqlServer -g $Cfg.ResourceGroup)) {
+    throw "run infra\azure\deploy.ps1 first: the tag policies would deny its untagged SQL server create"
+}
 $defName = '871b6d14-10aa-478d-b590-94f262ecfa99'   # built-in "Require a tag on resources"
 
 $def = Invoke-Az policy definition show -n $defName

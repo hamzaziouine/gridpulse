@@ -1,0 +1,189 @@
+# 8. Security and governance (report section 8, draft)
+
+Draft of 2026-11-22. Status at that date: in Azure only the resource group `rg-hz2611-cdda` and the budget `budget-cdda-20usd` exist (created 2026-11-06). Nothing exists in Fabric yet. The scripts and notebooks below were tested locally only. Every control has a status in section 8.8; a control is called "demonstrated in cloud" only once there is evidence for it in `docs/evidence/`.
+
+The brief (section 4) asks that security be visible in the architecture. In `docs/architecture.svg` it is the governance band at the bottom and the resource group box on the left.
+
+## 8.1 Identities, personas and least privilege
+
+Every person signs in with their own UIR Entra ID account (tenant `uir.ac.ma`). No account is shared. Permissions are granted at four levels, because Azure and Fabric each have their own permission system:
+
+1. Azure RBAC on the resource group `rg-hz2611-cdda` (control plane: create, change, delete resources).
+2. Key Vault data-plane roles (the vault runs in RBAC mode, so there are no access policies).
+3. Azure SQL database roles (`db_datareader`, `db_datawriter`), granted to contained Entra users.
+4. Fabric workspace roles on `ws_gridpulse` (Admin, Member, Contributor, Viewer).
+
+### Permission matrix (decision 3 of PLAN section 9, accepted)
+
+| Persona | Person | Azure RBAC, scope `rg-hz2611-cdda` | Key Vault `kv-hz2611-cdda` | Azure SQL `sqldb-hz2611-gridpulse` | Fabric `ws_gridpulse` |
+|---|---|---|---|---|---|
+| Admin | Mohamed NACIR | Owner (inherited: he owns the "Azure for Students" subscription) | Key Vault Administrator | Entra admin of `sql-hz2611-cdda` | Admin (owner of the trial capacity) |
+| Data Engineer | Hamza ZIOUINE | Contributor + Resource Policy Contributor | Key Vault Secrets Officer | `db_datareader` + `db_datawriter` | Member |
+| Analyst | Omar MOUNABBIH | Reader | none | none | Viewer (Contributor for a few days while he builds the report, then back to Viewer) |
+| Member 4, if one joins | to be confirmed | Reader | none | none | Viewer |
+
+Why each grant is the minimum we could find:
+
+- Admin. Nacir already holds Owner on the subscription and owns the Fabric trial; we cannot remove that. We therefore put every "grant access" power on him and keep him out of the daily building. Owner does not include Key Vault data access in RBAC mode, so he gets Key Vault Administrator explicitly. He is the only Entra admin of the SQL server.
+- Data Engineer. Contributor can create and delete resources in the RG but cannot assign roles (`Microsoft.Authorization/*/write` is excluded), so Hamza cannot raise his own rights or anyone else's. Contributor cannot write policy assignments either, so he gets Resource Policy Contributor on the RG only, to assign the two tag policies (section 8.4). Key Vault Secrets Officer lets him create and read secrets but not change who has access to the vault. In SQL he can read and write rows, not create users. In Fabric, Contributor would be enough to build every item; we gave Member so that he can share the report and manage the Analyst's access during the build. In production we would drop him to Contributor and let the Admin handle sharing.
+- Analyst. Reader on the RG shows resource names and settings but no data. Reader gives no Key Vault data role, so `az keyvault secret show` returns 403 Forbidden for Omar; this is the negative test of PLAN T8.2. He has no SQL user and sees the gold tables only through the semantic model `sm_gridpulse` and the report `rpt_gridpulse`.
+
+How the matrix gets applied: Nacir runs the three `az role assignment create` commands and the provider registration of PLAN section 5.3 (Hamza's object id `<entra-object-id-of-the-data-engineer>`, Omar's `<entra-object-id-of-the-analyst>`), then the two `fab acl set` commands for the workspace. Not run yet. `[TODO after T8.1: docs/evidence/rbac.md with the output of az role assignment list -g rg-hz2611-cdda --include-inherited -o table and the workspace role assignments]`
+
+Two ordering constraints in the scripts:
+
+- `infra/azure/deploy.ps1` creates the vault in RBAC mode and then writes `sql-gpadmin-password` and `customer-hash-salt` in the same run. Creating a vault does not give the creator data-plane rights, so Hamza needs Key Vault Secrets Officer at RG scope before the first run (Nacir assigns it before the vault exists). Otherwise the script stops at step 2 and has to be re-run after the role is added.
+- `deploy.ps1` creates the SQL server without tags and tags it in a second call. Once the deny policies of section 8.4 are assigned, that create would be refused. Run `deploy.ps1` before `policy_assignments.ps1`, or pass the tags at creation.
+
+### Non-human identities
+
+| Identity | Used by | Credential | Rights it needs | Weak point and production fix |
+|---|---|---|---|---|
+| Fabric connection `con_sql_gridpulse` | copy activity of `pl_daily_ingest` (ForEach over the 3 SQL tables) | SQL login `gpadmin`; `infra/fabric/deploy_fabric.ps1` reads the password from Key Vault and passes it to the connection through a temp file deleted right after (Fabric then stores it encrypted) | read 3 tables | it is the server admin login. Production: a contained read-only user, or Entra authentication with a service principal or the workspace identity, with `db_datareader` only |
+| Notebook identity | `nb_silver` reading `customer-hash-salt` with `notebookutils.credentials.getSecret` | the identity the notebook runs as (the user for an interactive run; for a scheduled pipeline run, to verify in T4.1) | read one secret | today Secrets Officer covers it. Production: Key Vault Secrets User scoped to that one secret |
+| `DefaultAzureCredential` on the laptop | `realtime/simulator.py` reading `es-meters-conn` | the signed-in `az` CLI user | read one secret | the simulator runs as a person. Production: the simulator would be a cloud service with a managed identity |
+| Eventstream custom endpoint key | simulator sending events | SAS key inside the connection string | send to one endpoint | key in Key Vault only. Production: rotate it, or use Entra authentication if the endpoint supports it for our case |
+| Outlook connection `con_outlook_alerts` | failure mail of the pipeline | OAuth of the member who created it (UI step, T3.6) | send mail | mails leave from a personal mailbox. Production: a shared mailbox or a Teams/webhook channel |
+
+### What we have not solved (and say so in the defence)
+
+1. Key Vault Secrets Officer lets the Engineer read `sql-gpadmin-password`, so in practice he can log in as SQL server admin. We accept it for the build because he loads the schema. Production: only the Admin reads that secret; the Engineer gets a contained user with DDL rights on his own schema.
+2. One Lakehouse (DESIGN D6) means a workspace role covers bronze, silver and gold at once. `bronze_customers` holds PII in the same Lakehouse as the gold tables. To verify in T8.2: can a workspace Viewer query `bronze_customers` through the Lakehouse SQL analytics endpoint? If yes, we fix it in one of two ways: (a) remove Omar's workspace role and share only `rpt_gridpulse` and `sm_gridpulse` with him, the semantic model reading the tables with a fixed identity (a cloud connection owned by the Engineer), or (b) `DENY SELECT` on the `bronze_` and `silver_` tables for the Analyst on the SQL analytics endpoint. Three Lakehouses (one per layer) would make this a workspace or item permission question instead; we kept one for setup time and document the trade-off.
+3. The Admin's Owner role comes from the subscription and also covers Nacir's other resource groups (`TP6`, `tp1`). We cannot narrow it.
+
+## 8.2 Secrets and keys
+
+| Secret in `kv-hz2611-cdda` | What it is | Written by | Read by, and how |
+|---|---|---|---|
+| `sql-gpadmin-password` | password of the SQL admin login `gpadmin` | `infra/azure/deploy.ps1`: generated once (28 characters, all four SQL complexity classes, .NET cryptographic RNG), passed to `az keyvault secret set` through a temporary file so it never appears on a command line, never printed, file deleted | `scripts/load_sql.py --kv-url ... --kv-secret sql-gpadmin-password` with `DefaultAzureCredential` (never from the command line, a file or an environment variable); `infra/fabric/deploy_fabric.ps1` when it creates `con_sql_gridpulse` (temp file, deleted at once) |
+| `customer-hash-salt` | random salt for the customer pseudonym (section 8.3) | `infra/azure/deploy.ps1`: 32 random bytes as hex, generated once and kept on reruns (a new salt would change every `customer_hash`), written through a temporary file | `nb_silver` through `gridpulse.lakehouse.get_secret`, which calls `notebookutils.credentials.getSecret(key_vault_url, name)` inside Fabric |
+| `es-meters-conn` | connection string of the Eventstream custom endpoint (Event Hubs protocol, includes a SAS key) | the Engineer copies it from the Eventstream source details into `az keyvault secret set` (UI step, PLAN T6.2); it is never pasted into chat or files | `realtime/simulator.py --kv-url https://kv-hz2611-cdda.vault.azure.net --kv-secret es-meters-conn` through `SecretClient` with `DefaultAzureCredential` |
+
+Nothing secret is in Git:
+
+- The notebooks carry only the vault URL and the secret name as parameters (`key_vault_url`, `salt_secret_name`).
+- `.gitignore` excludes `.env`, `*.env`, `*.local.json` (connection ids), `data/lakehouse/` (it holds the local salt file `local_salt.txt`), `mlruns/` and `data/raw/`.
+- Local runs never touch Key Vault: `scripts/run_local.py` takes the salt from `$GRIDPULSE_HASH_SALT` or generates a random one into the git-ignored `data/lakehouse/local_salt.txt`.
+- `tests/unit/test_repo_hygiene.py::test_no_secret_looking_values_tracked` reads every file git tracks or would track and fails the test suite if it finds `SharedAccessKey=...`, `AccountKey=...`, a quoted `password = '...'` of 8 or more characters, or a GitHub token (`github_pat_...`). It runs with every `pytest` run.
+
+Vault settings (`deploy.ps1`): RBAC authorization, soft delete 7 days (the minimum), purge protection off so the vault can be purged at cleanup, public network access enabled. Production: purge protection on, private endpoint, public access off.
+
+Rotation: the SQL password and the Eventstream key can be replaced in Key Vault and in the one place that uses each. Changing the salt changes every `customer_hash`; this stays consistent because `nb_silver` recomputes all silver tables from bronze on each run and `nb_gold` rebuilds the dimensions after it.
+
+## 8.3 Data classification
+
+The customer data is synthetic (Faker, seed 2611, `example.com` emails, `555-01xx` phone numbers), but we handle it as if it were real.
+
+| Column | Where | Classification | Handling |
+|---|---|---|---|
+| `customers.full_name` | Azure SQL | Confidential - GDPR, Name, rank HIGH | stays in SQL and `bronze_customers`; dropped in silver |
+| `customers.email` | Azure SQL | Confidential - GDPR, Contact Info, HIGH | same; also checked unique (`email_unique` DQ check) |
+| `customers.phone` | Azure SQL | Confidential - GDPR, Contact Info, HIGH | same |
+| `customers.street_address` | Azure SQL | Confidential - GDPR, Contact Info, HIGH | same |
+| `customers.postal_code` | Azure SQL | Confidential, Contact Info, MEDIUM (quasi-identifier) | same |
+| `customers.customer_id`, `meters.customer_id` | Azure SQL, bronze | internal identifier that links a meter to a person | replaced by `customer_hash` in silver |
+| `meter_id` in live events | Eventhouse | internal | events carry `meter_id` and `site_id` only, no customer field |
+| demand, weather | Lakehouse | public (IESO, Open-Meteo) | licence notices in `NOTICE.md`; bulk IESO files never committed |
+
+How the PII is contained:
+
+- SQL: `sql/001_schema.sql` adds a sensitivity classification to the five PII columns (`ADD SENSITIVITY CLASSIFICATION ... WITH (LABEL, INFORMATION_TYPE, RANK)`). They show in the portal under Data Discovery and Classification and in `sys.sensitivity_classifications`. `[TODO after T2.2: screenshot + query output with 5 rows]`. If SQL auditing were enabled, queries touching these columns would be marked with the sensitivity information in the audit log; auditing is off (log cost), production would turn it on.
+- Lakehouse: `bronze_customers` is the only table with PII (pipeline copy of `dbo.customers`). `nb_silver` writes `silver_customers_pseudo` with `customer_hash`, city, segment and `customer_since`, and `silver_meters` with the same `customer_hash` instead of `customer_id`. Gold has no PII column; `gold_dim_meter` keeps `customer_hash`, segment and `customer_since`.
+- Quality gate: the DQ check `pii_absent` fails the silver run if any PII column name appears in `silver_customers_pseudo` or `silver_meters`. In the local run of 2026-11-22 it passed (tested locally).
+- The pseudonym is `sha2(salt || ':' || customer_id, 256)`. A plain hash of an id between 1 and 50 could be reversed by trying all 50 values; the salt kept in Key Vault prevents that, and the hash stays stable so joins between meters and customers still work. This is pseudonymisation, not anonymisation: the Admin, with the salt and SQL access, can re-identify a customer, and with only 50 customers the combination city + segment + `customer_since` can single someone out. Improvements: an HMAC with a key, and dropping `customer_since` from gold.
+
+How Microsoft Purview would discover and classify these assets:
+
+1. Azure SQL. Register `sql-hz2611-cdda` in the Purview Data Map, give the Purview managed identity read access to the database, and run a scan with the system scan rule set. The built-in classifiers look at column names and sampled values (email address, person name, phone number, address) and attach classifications to the columns; the results show in the catalog with the asset's schema.
+2. OneLake. Register the Fabric tenant as a source and scan it. This gives the workspace items, Lakehouse tables and lineage from pipeline to Lakehouse to semantic model to report. It needs a Fabric administrator to allow read-only admin APIs for the scanner. How much column-level classification a scan gives for Lakehouse tables is to be checked against the Purview documentation before the final report.
+3. Inside Fabric, without a Purview account: the OneLake catalog "Govern" view (formerly the Purview hub) lists our items with their descriptions, endorsement and sensitivity label coverage. If the UIR tenant publishes Purview Information Protection labels to us, we put "Confidential" on `lh_gridpulse` and `sm_gridpulse`; the label then follows exports to Excel or PBIX.
+
+What a trial tenant lets us show, and what not:
+
+| Can show | Cannot show |
+|---|---|
+| SQL sensitivity classifications (portal + query) | a Purview Data Map scan: we have no Purview account (the `Microsoft.Purview` provider is not registered on the subscription) and the account would add cost |
+| OneLake catalog Govern view for our own items, item descriptions, Fabric lineage view of the workspace | a scan of the Fabric tenant: needs Fabric administrator rights, which none of us has (`fab api admin/tenantsettings` returns 403) |
+| the `pii_absent` check and the absence of PII columns in silver and gold | sensitivity labels, unless the tenant has published them to us (to check in the label picker, T8.6) |
+
+## 8.4 Policy and location
+
+- Allowed regions (inherited). The subscription carries the assignment `sys.regionrestriction` ("Allowed resource deployment regions"): switzerlandnorth, italynorth, denmarkeast, germanywestcentral, polandcentral. We use Germany West Central for every Azure resource (DESIGN D21) and chose the same region for the Fabric trial capacity. Azure Policy does not govern the Fabric trial region (the trial is not an Azure resource); we set it by hand in the Start-trial dialog.
+- Required tags (ours). `infra/azure/policy_assignments.ps1` assigns the built-in definition "Require a tag on resources" (`871b6d14-10aa-478d-b590-94f262ecfa99`, effect deny) twice at RG scope: `require-tag-project` and `require-tag-owner`. The script first checks that the definition's display name is the expected one, and skips assignments that already exist. Our resources carry `project=cdda-gridpulse`, `owner=hamza.ziouine`, `course=CDDA-2627` (`infra/azure/common.ps1`). The RG itself is already tagged; this definition applies to resources inside it.
+- Live denial demo: `powershell -File infra\azure\policy_assignments.ps1 -Test` tries to create the storage account `stgpulsepolicytest` without tags. Expected result: `RequestDisallowedByPolicy`, nothing created. A new assignment can take up to about 30 minutes to take effect; if the account does get created in that window, the script deletes it. `[TODO after T1A.5: output saved in docs/evidence/policy.md]`
+- The compliance view (`az policy state summarize`) stays empty until Nacir registers `Microsoft.PolicyInsights` (PLAN 5.3).
+- Production: a "modify" policy that copies tags from the RG instead of denying, "Azure SQL should disable public network access", "Key Vault should use private link", assignments at management-group level, and the policy definitions kept in the repository.
+
+## 8.5 Encryption and networking
+
+At rest:
+
+- Azure SQL Database: Transparent Data Encryption is on by default with a service-managed key.
+- Fabric: OneLake data (Lakehouse files and Delta tables) and Eventhouse data are encrypted at rest with Microsoft-managed keys.
+- Key Vault encrypts secrets by design.
+- Production option: customer-managed keys (TDE with a key in Key Vault; for Fabric, check which SKUs support workspace customer-managed keys).
+
+In transit:
+
+- Azure SQL: minimum TLS version 1.2, set by `deploy.ps1` (`--minimal-tls-version 1.2`).
+- Fabric, Power BI, Key Vault, IESO (`https://reports-public.ieso.ca`) and Open-Meteo: HTTPS.
+- Simulator to Eventstream: the Event Hubs client library uses AMQP over TLS.
+
+Network exposure, and why it stays public here:
+
+| Endpoint | Exposure in our build | Why | Production |
+|---|---|---|---|
+| `sql-hz2611-cdda` | public endpoint; firewall rules `AllowAzureServices` (0.0.0.0) and `laptop-<user>` (the current public IP of the laptop running `deploy.ps1`) | the Fabric copy activity runs on shared Fabric infrastructure with no fixed outbound IP we could allow. `AllowAzureServices` is broad: it lets any Azure-hosted client reach the login step (authentication is still required) | private endpoint, public access off, and a VNet data gateway or Fabric managed private endpoint for the pipeline (both need paid capacity, a VNet and admin rights we do not have); Entra-only authentication on SQL |
+| `kv-hz2611-cdda` | public network access enabled; Entra ID authentication + RBAC | the laptop simulator and Fabric notebooks must reach it | private endpoint + firewall, trusted services only |
+| Eventstream custom endpoint | public; SAS key required | the simulator runs on a laptop outside any VNet | private network path, or a managed producer inside Azure |
+| Fabric workspace, Power BI | public; Entra sign-in with MFA | trial capacity, student tenant | tenant or workspace private link, conditional access |
+
+## 8.6 Monitoring and audit
+
+| What happens | Where it is recorded | Alert we use or would use | Status |
+|---|---|---|---|
+| role assignments, resource create, change and delete, policy denials | Azure activity log (subscription, kept 90 days, no cost). Query: `az monitor activity-log list -g rg-hz2611-cdda` | production: activity-log alert on `Microsoft.Authorization/roleAssignments/write` in the RG | platform default |
+| who read which secret | Key Vault `AuditEvent` logs, only once a diagnostic setting sends them to Log Analytics or storage | production: alert on a secret read by an unexpected principal | designed; not enabled because Log Analytics ingestion costs money |
+| logins and queries on classified SQL columns | SQL auditing | production: alert on reads of the PII columns outside the pipeline | designed; off |
+| pipeline and notebook runs, durations, failures | Fabric Monitor hub (run history) | `pl_daily_ingest` failure path: Office 365 Outlook mail, then a Fail activity so the run stays marked Failed | designed (UI step T3.6) `[TODO after T3.6: screenshot of a test failure mail]` |
+| data quality | `silver_dq_results`, 17 checks per run (PASS / WARN / FAIL) | a FAIL makes `nb_silver` raise after writing the results and before overwriting silver, so the pipeline fails and sends the mail | tested locally: 14 PASS, 3 WARN, 0 FAIL |
+| abnormal live consumption | Eventhouse `meter_readings`, KQL Q2 | Activator `act_abnormal_demand`: mail when Q2 returns rows | designed `[TODO after T6.6: alert mail screenshot]` |
+| spend | Cost Management budget `budget-cdda-20usd` | mails at 50 % and 100 % of actual cost and 100 % of forecast cost, to Hamza and Nacir | in place since 2026-11-06 (spend 0.00 USD that day) |
+| Fabric capacity load and throttling | Fabric Capacity Metrics app (capacity admin = Nacir) | production: alert on sustained throttling | optional |
+| user activity in Fabric (who opened which item) | Fabric events in the Microsoft Purview audit log | production | not available to us (needs audit admin rights) |
+
+## 8.7 Cost and cleanup
+
+Cost drivers and sizing are in report section 10. The list of every resource with its SKU, cost estimate, status and cleanup action, and the cleanup order, are in `docs/resource_inventory.md`. Summary: Fabric trial capacity $0, Azure SQL free offer $0 (the database pauses when the free monthly allowance is used up, it does not bill), Key Vault under $0.10 a month, expected total under $2 against a $20 budget alert. After grading, `infra/azure/cleanup.ps1` deletes `rg-hz2611-cdda` only: it refuses any other name and the protected groups `TP6` and `tp1`, and asks for the RG name to be typed back.
+
+## 8.8 Control status
+
+Status values: designed (written down, nothing to run yet), scripted (code exists, not run against Azure or Fabric), demonstrated locally (run on the laptop, output seen), demonstrated in cloud (run in Azure or Fabric, evidence saved). Two rows say "in place in cloud": they exist in Azure but nobody has triggered them yet.
+
+| Control | Status | Evidence |
+|---|---|---|
+| 3 personas, Azure RBAC on the RG | designed | PLAN 5.1 and 5.3. `[TODO after T8.1: docs/evidence/rbac.md]` |
+| Fabric workspace roles (Admin, Member, Viewer) | designed | `fab acl set` commands in PLAN 5.3. `[TODO after T1F.2]` |
+| Analyst denied on Key Vault (403) | designed | `[TODO after T8.2: screenshot of az keyvault secret show as Omar]` |
+| Viewer cannot reach `bronze_customers` | designed, to verify | section 8.1, point 2. `[TODO after T8.2]` |
+| Key Vault in RBAC mode with `sql-gpadmin-password` and `customer-hash-salt` | scripted | `infra/azure/deploy.ps1` steps 1, 2 and 2b |
+| `es-meters-conn` in Key Vault | designed (manual `az keyvault secret set` after the UI copy) | PLAN T6.2, `infra/fabric/README.md` browser step 2 |
+| SQL password only read from Key Vault by tools | scripted (unit tests run `load_sql.py` against SQLite and in `--dry-run`) | `scripts/load_sql.py`, `infra/fabric/deploy_fabric.ps1` |
+| Simulator reads its connection string from Key Vault | scripted (dry-run mode tested locally) | `realtime/simulator.py` `connection_string()`, `tests/unit/test_simulator.py` |
+| `nb_silver` reads the salt from Key Vault | scripted (local run used the env-var fallback) | `src/gridpulse/lakehouse.py` `get_secret()` |
+| No secrets in Git | demonstrated locally | `tests/unit/test_repo_hygiene.py` |
+| SQL sensitivity classifications on 5 columns | scripted | `sql/001_schema.sql`. `[TODO after T2.2]` |
+| Pseudonymisation in silver + `pii_absent` check | demonstrated locally | local run 2026-11-22: `silver_customers_pseudo` 50 rows, `pii_absent` PASS |
+| Purview scan of Azure SQL and OneLake | designed | section 8.3 |
+| OneLake catalog Govern view, labels | designed | `[TODO after T8.6: screenshots]` |
+| Allowed regions | in place in cloud (inherited) | `az policy assignment list` on 2026-11-06 listed `sys.regionrestriction` |
+| Required tags `project` and `owner`, deny | scripted | `infra/azure/policy_assignments.ps1`. `[TODO after T8.5: -Test output in docs/evidence/policy.md]` |
+| TDE, OneLake encryption at rest | platform default | nothing to deploy; screenshot of the TDE blade `[TODO after T1A.2]` |
+| TLS 1.2 minimum on SQL | scripted | `deploy.ps1` step 3 |
+| SQL firewall (Azure services + laptop IP) | scripted | `deploy.ps1` step 4 |
+| Activity log | platform default | `[TODO after T8.7: az monitor activity-log output]` |
+| Pipeline failure mail | designed | PLAN T3.6 |
+| Data-quality gate (17 checks, stop on FAIL) | demonstrated locally | `silver_dq_results` of the local run: 14 PASS, 3 WARN, 0 FAIL |
+| Activator alert on Q2 | designed | `realtime/kql/q2_anomaly.kql`, PLAN T6.6 |
+| Budget alerts 50 / 100 / forecast 100 | in place in cloud | budget read back on 2026-11-06 (PLAN 1.3) |
+| Guarded cleanup | scripted | `infra/azure/cleanup.ps1` |
