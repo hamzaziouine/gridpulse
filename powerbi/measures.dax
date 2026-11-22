@@ -1,0 +1,465 @@
+// GridPulse measures for the Direct Lake semantic model sm_gridpulse.
+// Spec: powerbi/semantic_model_spec.md. Report: powerbi/report_spec.md.
+// Status 2026-11-22: written against the gold schemas in src/gridpulse/medallion/gold.py and the
+// gold_forecast / gold_forecast_eval schema; not run in Fabric yet.
+//
+// How to add a measure (web modelling or Power BI Desktop):
+//   1. Select the home table named in the section header below.
+//   2. New measure, then paste one block: from the line "Name =" down to the line before the
+//      next blank line. The comment lines inside a block are part of the expression; DAX accepts them.
+//   3. Set the format string and display folder written on the first comment line of the block.
+//
+// Conventions:
+//   - Every measure whose name ends in % returns a FRACTION (0.034 = 3.4 %) and uses a % format
+//     string, so Power BI shows it as a percentage. The gold columns ape_pct, mape_pct,
+//     peak_ape_pct, skill_vs_naive_pct and yoy_energy_pct are stored in percent units (3.4 = 3.4 %);
+//     the measures below divide them by 100.
+//   - Ratios use DIVIDE so an empty denominator gives BLANK instead of an error.
+//   - gold_dim_date is marked as the date table (column est_date); see the model spec.
+//   - Forecast measures read gold_forecast rows, so every slicer on the page applies. The backtest
+//     and holdout splits cover the same 2026 hours: keep the split slicer on single select.
+
+
+// ==================================================================================================
+// Home table: gold_demand_hourly
+// ==================================================================================================
+
+Total Energy (GWh) =
+// Format: #,0.0 | Folder: Demand
+// Each row is one hour of average MW, so the sum is MWh; divided by 1000 for GWh.
+DIVIDE ( SUM ( gold_demand_hourly[ontario_demand_mw] ), 1000 )
+
+Avg Load (MW) =
+// Format: #,0 | Folder: Demand
+// Mean hourly Ontario demand in the filter context. Used by the hour x weekday heatmap.
+AVERAGE ( gold_demand_hourly[ontario_demand_mw] )
+
+Peak Load (MW) =
+// Format: #,0 | Folder: Peaks
+// Highest hourly Ontario demand in the filter context. KPI 1 of the proposal.
+MAX ( gold_demand_hourly[ontario_demand_mw] )
+
+Peak Load Date =
+// Format: yyyy-mm-dd | Folder: Peaks
+// EST date of the highest hour in the filter context (the earliest one if two hours tie).
+VAR _top =
+    TOPN ( 1, gold_demand_hourly, gold_demand_hourly[ontario_demand_mw], DESC )
+RETURN
+    MINX ( _top, gold_demand_hourly[est_date] )
+
+Peak Load Hour (HE) =
+// Format: 0 | Folder: Peaks
+// Hour-ending (EST) of the highest hour in the filter context. Add 1 h for the Toronto clock in summer.
+VAR _top =
+    TOPN ( 1, gold_demand_hourly, gold_demand_hourly[ontario_demand_mw], DESC )
+RETURN
+    MINX ( _top, gold_demand_hourly[hour_ending] )
+
+Load Factor =
+// Format: 0.0% | Folder: Demand
+// Average load / peak load over the selected period. 100 % would be a perfectly flat load.
+// Not the same as averaging gold_demand_daily[load_factor], which is a per-day value.
+DIVIDE ( [Avg Load (MW)], [Peak Load (MW)] )
+
+On-peak Share % =
+// Format: 0.0% | Folder: Demand
+// Share of energy consumed in on-peak hours (business days, HE 8 to 23).
+VAR _all =
+    SUM ( gold_demand_hourly[ontario_demand_mw] )
+VAR _onpeak =
+    CALCULATE (
+        SUM ( gold_demand_hourly[ontario_demand_mw] ),
+        gold_demand_hourly[is_onpeak] = TRUE ()
+    )
+RETURN
+    DIVIDE ( _onpeak, _all )
+
+Energy YoY % =
+// Format: +0.0%;-0.0%;0.0% | Folder: Demand
+// Energy of the selected dates against the same dates one year earlier. Dates after the last
+// complete day with data are dropped first, so a partial current year is compared like for like.
+// The dates are shifted with EDATE instead of SAMEPERIODLASTYEAR so that a non-contiguous
+// selection (for example season = Winter) also works. Blank when the year before has no data (2019).
+VAR _lastDay =
+    CALCULATE (
+        MAX ( gold_demand_daily[est_date] ),
+        REMOVEFILTERS (),
+        gold_demand_daily[is_complete_day] = TRUE ()
+    )
+VAR _dates =
+    FILTER ( VALUES ( gold_dim_date[est_date] ), gold_dim_date[est_date] <= _lastDay )
+VAR _previousDates =
+    TREATAS (
+        SELECTCOLUMNS ( _dates, "@date", EDATE ( gold_dim_date[est_date], -12 ) ),
+        gold_dim_date[est_date]
+    )
+VAR _current =
+    CALCULATE ( [Total Energy (GWh)], _dates )
+VAR _previous =
+    CALCULATE ( [Total Energy (GWh)], REMOVEFILTERS ( gold_dim_date ), _previousDates )
+RETURN
+    IF (
+        NOT ISBLANK ( _current ) && NOT ISBLANK ( _previous ),
+        DIVIDE ( _current, _previous ) - 1
+    )
+
+Avg Temperature (C) =
+// Format: 0.0 | Folder: Weather
+// Mean population-weighted Ontario temperature (5 cities). Hours without weather are ignored.
+AVERAGE ( gold_demand_hourly[temperature_c] )
+
+Heating Slope (MW per C) =
+// Format: #,0 | Folder: Weather
+// Least-squares slope of demand on temperature over the hours below 15 C in the filter context,
+// sign flipped: MW added per degree colder. Same definition as gold_sensitivity_yearly, so for one
+// full year it must equal gold_sensitivity_yearly[heating_mw_per_c] (use that as a check).
+// The ISBLANK test matters: DAX treats a blank temperature as 0, which is below 15.
+VAR _rows =
+    FILTER (
+        gold_demand_hourly,
+        NOT ISBLANK ( gold_demand_hourly[temperature_c] )
+            && gold_demand_hourly[temperature_c] < 15
+    )
+VAR _n =
+    COUNTROWS ( _rows )
+VAR _meanT =
+    AVERAGEX ( _rows, gold_demand_hourly[temperature_c] )
+VAR _meanLoad =
+    AVERAGEX ( _rows, gold_demand_hourly[ontario_demand_mw] )
+VAR _sxy =
+    SUMX (
+        _rows,
+        ( gold_demand_hourly[temperature_c] - _meanT ) * ( gold_demand_hourly[ontario_demand_mw] - _meanLoad )
+    )
+VAR _sxx =
+    SUMX ( _rows, ( gold_demand_hourly[temperature_c] - _meanT ) ^ 2 )
+RETURN
+    IF ( _n >= 2, -1 * DIVIDE ( _sxy, _sxx ) )
+
+Cooling Slope (MW per C) =
+// Format: #,0 | Folder: Weather
+// Least-squares slope of demand on temperature over the hours above 20 C in the filter context:
+// MW added per degree warmer. Equals gold_sensitivity_yearly[cooling_mw_per_c] for one full year.
+VAR _rows =
+    FILTER (
+        gold_demand_hourly,
+        NOT ISBLANK ( gold_demand_hourly[temperature_c] )
+            && gold_demand_hourly[temperature_c] > 20
+    )
+VAR _n =
+    COUNTROWS ( _rows )
+VAR _meanT =
+    AVERAGEX ( _rows, gold_demand_hourly[temperature_c] )
+VAR _meanLoad =
+    AVERAGEX ( _rows, gold_demand_hourly[ontario_demand_mw] )
+VAR _sxy =
+    SUMX (
+        _rows,
+        ( gold_demand_hourly[temperature_c] - _meanT ) * ( gold_demand_hourly[ontario_demand_mw] - _meanLoad )
+    )
+VAR _sxx =
+    SUMX ( _rows, ( gold_demand_hourly[temperature_c] - _meanT ) ^ 2 )
+RETURN
+    IF ( _n >= 2, DIVIDE ( _sxy, _sxx ) )
+
+Last Demand Date =
+// Format: yyyy-mm-dd | Folder: Data quality
+// Newest EST date with demand in gold, whatever the slicers say. Shows how fresh the model is.
+CALCULATE ( MAX ( gold_demand_hourly[est_date] ), REMOVEFILTERS () )
+
+
+// ==================================================================================================
+// Home table: gold_demand_daily
+// ==================================================================================================
+
+Avg Daily Energy (GWh) =
+// Format: #,0.0 | Folder: Demand
+// Mean energy per EST day over complete days (24 hours) in the filter context. KPI 2 of the
+// proposal. Partial days (the newest day, 2025-05-01 with its unpublished hour) are left out.
+CALCULATE (
+    AVERAGE ( gold_demand_daily[energy_gwh] ),
+    KEEPFILTERS ( gold_demand_daily[is_complete_day] = TRUE () )
+)
+
+
+// ==================================================================================================
+// Home table: gold_top_peaks
+// ==================================================================================================
+
+Hours Above 99th Percentile =
+// Format: #,0 | Folder: Peaks
+// Hours of the filter context that are in the top 1 % of all hours since 2019 (threshold fixed
+// over the whole history, see Peak Threshold (MW)). Returns 0 instead of blank so that months
+// without such an hour show an empty bar. Do not put it in a visual with a date-level axis.
+COUNTROWS ( gold_top_peaks ) + 0
+
+Peak Threshold (MW) =
+// Format: #,0 | Folder: Peaks
+// The 99th percentile of hourly demand over the whole history (same value on every row).
+CALCULATE ( MAX ( gold_top_peaks[threshold_mw] ), REMOVEFILTERS () )
+
+
+// ==================================================================================================
+// Home table: gold_temp_sensitivity
+// ==================================================================================================
+
+Avg Demand by Temp Bin (MW) =
+// Format: #,0 | Folder: Weather
+// Mean demand per 1 C temperature bin, weighted by hours (the table holds one row per bin, season
+// and business-day flag). gold_temp_sensitivity has no date and no relationship: the season
+// slicer on gold_dim_date is applied through TREATAS; the year slicer cannot apply (whole history).
+CALCULATE (
+    DIVIDE (
+        SUMX ( gold_temp_sensitivity, gold_temp_sensitivity[hours] * gold_temp_sensitivity[avg_demand_mw] ),
+        SUM ( gold_temp_sensitivity[hours] )
+    ),
+    KEEPFILTERS ( TREATAS ( VALUES ( gold_dim_date[season] ), gold_temp_sensitivity[season] ) )
+)
+
+
+// ==================================================================================================
+// Home table: gold_city_weather_daily
+// ==================================================================================================
+
+Avg City Temperature (C) =
+// Format: 0.0 | Folder: Weather
+// Mean temperature of the selected cities and days, weighted by the hours of each day.
+DIVIDE (
+    SUMX ( gold_city_weather_daily, gold_city_weather_daily[temp_mean_c] * gold_city_weather_daily[hours] ),
+    SUM ( gold_city_weather_daily[hours] )
+)
+
+City Heating Degree Days =
+// Format: #,0 | Folder: Weather
+// Heating degree days (base 18 C) of the selected period, averaged over the selected cities.
+DIVIDE (
+    SUM ( gold_city_weather_daily[hdd] ),
+    DISTINCTCOUNT ( gold_city_weather_daily[city_key] )
+)
+
+City Cooling Degree Days =
+// Format: #,0 | Folder: Weather
+// Cooling degree days (base 18 C) of the selected period, averaged over the selected cities.
+DIVIDE (
+    SUM ( gold_city_weather_daily[cdd] ),
+    DISTINCTCOUNT ( gold_city_weather_daily[city_key] )
+)
+
+
+// ==================================================================================================
+// Home table: gold_forecast
+// ==================================================================================================
+
+Actual (MW) =
+// Format: #,0 | Folder: Forecast
+// AVERAGE, not SUM: if two splits are ever in context for one hour, the line does not double.
+AVERAGE ( gold_forecast[actual_mw] )
+
+Forecast (MW) =
+// Format: #,0 | Folder: Forecast
+AVERAGE ( gold_forecast[forecast_mw] )
+
+Naive 168 (MW) =
+// Format: #,0 | Folder: Forecast
+// Seasonal naive baseline: demand of the same hour one week earlier.
+AVERAGE ( gold_forecast[naive168_mw] )
+
+Forecast MAPE % =
+// Format: 0.00% | Folder: Forecast
+// Mean absolute percentage error of the LightGBM forecast over the rows that have an actual,
+// within the filter context (split slicer, dates, hour). KPI 3 of the proposal.
+// ape_pct is stored in percent units, hence the division by 100.
+// If a second model is ever written to gold_forecast, add a slicer on gold_forecast[model_name].
+VAR _rows =
+    FILTER ( gold_forecast, NOT ISBLANK ( gold_forecast[actual_mw] ) )
+RETURN
+    DIVIDE ( AVERAGEX ( _rows, gold_forecast[ape_pct] ), 100 )
+
+Naive MAPE % =
+// Format: 0.00% | Folder: Forecast
+// Same error for the seasonal naive 168 h baseline, on rows that have both an actual and a naive
+// value. The row set only differs from Forecast MAPE % on hours whose week-earlier hour is missing
+// (the week after the known 2025-05-01 05:00 UTC gap).
+VAR _rows =
+    FILTER (
+        gold_forecast,
+        NOT ISBLANK ( gold_forecast[actual_mw] )
+            && NOT ISBLANK ( gold_forecast[naive168_mw] )
+            && gold_forecast[actual_mw] <> 0
+    )
+RETURN
+    AVERAGEX (
+        _rows,
+        DIVIDE ( ABS ( gold_forecast[actual_mw] - gold_forecast[naive168_mw] ), gold_forecast[actual_mw] )
+    )
+
+Forecast Skill % (vs naive) =
+// Format: 0.0% | Folder: Forecast
+// 1 - MAPE model / MAPE naive. Same formula as gold_forecast_eval[skill_vs_naive_pct] / 100.
+// Success criterion 6: at least 30 %. Blank (not 100 %) when either MAPE is blank.
+VAR _model = [Forecast MAPE %]
+VAR _naive = [Naive MAPE %]
+RETURN
+    IF (
+        NOT ISBLANK ( _model ) && NOT ISBLANK ( _naive ) && _naive <> 0,
+        1 - DIVIDE ( _model, _naive )
+    )
+
+Skill Target =
+// Format: 0% | Folder: Forecast
+// Success criterion 6 of the proposal: beat the seasonal naive MAPE by at least 30 %.
+0.3
+
+Skill vs Target =
+// Format: (text) | Folder: Forecast
+// Text for a card under the skill KPI.
+VAR _skill = [Forecast Skill % (vs naive)]
+RETURN
+    SWITCH (
+        TRUE (),
+        ISBLANK ( _skill ), "No hours with actuals in this selection",
+        _skill >= [Skill Target], "Meets the 30 % target",
+        "Below the 30 % target"
+    )
+
+Forecast MAE (MW) =
+// Format: #,0 | Folder: Forecast
+// Mean absolute error in MW over rows that have an actual.
+VAR _rows =
+    FILTER ( gold_forecast, NOT ISBLANK ( gold_forecast[actual_mw] ) )
+RETURN
+    AVERAGEX ( _rows, gold_forecast[abs_error_mw] )
+
+Forecast RMSE (MW) =
+// Format: #,0 | Folder: Forecast
+// Root mean squared error in MW over rows that have an actual.
+VAR _rows =
+    FILTER ( gold_forecast, NOT ISBLANK ( gold_forecast[actual_mw] ) )
+VAR _mse =
+    AVERAGEX ( _rows, ( gold_forecast[forecast_mw] - gold_forecast[actual_mw] ) ^ 2 )
+RETURN
+    IF ( NOT ISBLANK ( _mse ), SQRT ( _mse ) )
+
+Peak-hour APE % =
+// Format: 0.00% | Folder: Forecast
+// For each EST day (and split) with actuals: the absolute percentage error at the hour with the
+// highest actual demand; then the mean over the days. Same idea as gold_forecast_eval[peak_ape_pct].
+// If two hours of a day tie on the actual peak, the larger error is kept.
+VAR _days =
+    CALCULATETABLE (
+        SUMMARIZE ( gold_forecast, gold_forecast[split], gold_forecast[est_date] ),
+        NOT ISBLANK ( gold_forecast[actual_mw] )
+    )
+VAR _perDay =
+    ADDCOLUMNS (
+        _days,
+        "@peak_ape",
+            VAR _peakMw =
+                CALCULATE ( MAX ( gold_forecast[actual_mw] ) )
+            RETURN
+                CALCULATE ( MAX ( gold_forecast[ape_pct] ), gold_forecast[actual_mw] = _peakMw )
+    )
+RETURN
+    DIVIDE ( AVERAGEX ( _perDay, [@peak_ape] ), 100 )
+
+Forecast Split Shown =
+// Format: (text) | Folder: Forecast
+// Which split the page is showing; warns when the slicer allows more than one.
+SELECTEDVALUE ( gold_forecast[split], "Select one split" )
+
+
+// ==================================================================================================
+// Home table: gold_forecast_eval
+// ==================================================================================================
+
+Eval Row Matches Split =
+// Format: 0 | Folder: Forecast | Hidden helper
+// Visual-level filter for the gold_forecast_eval table visual (set "is 1"). gold_forecast_eval has
+// no relationship to gold_forecast, so the split slicer (on gold_forecast[split]) does not reach it;
+// this measure reads the slicer and keeps the matching rows. The visual must show the split column.
+VAR _picked =
+    SELECTEDVALUE ( gold_forecast[split] )
+VAR _row =
+    SELECTEDVALUE ( gold_forecast_eval[split] )
+RETURN
+    IF ( ISBLANK ( _picked ) || _row = _picked, 1, 0 )
+
+
+// ==================================================================================================
+// Home table: silver_dq_results
+// ==================================================================================================
+
+DQ Checks Failed =
+// Format: 0 | Folder: Data quality
+// FAIL rows of the latest run date (nb_silver keeps one run per run_date). A value above 0 means
+// silver and gold were NOT refreshed by that run: the report shows the last good data.
+VAR _lastRun =
+    MAX ( silver_dq_results[run_date] )
+RETURN
+    CALCULATE (
+        COUNTROWS ( silver_dq_results ),
+        silver_dq_results[run_date] = _lastRun,
+        silver_dq_results[status] = "FAIL"
+    ) + 0
+
+DQ Checks Warned =
+// Format: 0 | Folder: Data quality
+// WARN rows of the latest run date (known or expected conditions, for example the 2025-05-01 gap).
+VAR _lastRun =
+    MAX ( silver_dq_results[run_date] )
+RETURN
+    CALCULATE (
+        COUNTROWS ( silver_dq_results ),
+        silver_dq_results[run_date] = _lastRun,
+        silver_dq_results[status] = "WARN"
+    ) + 0
+
+DQ Last Run =
+// Format: yyyy-mm-dd hh:nn | Folder: Data quality
+// Time of the latest quality run, in UTC (label the card "DQ last run (UTC)").
+MAX ( silver_dq_results[checked_at] )
+
+Is Latest DQ Run =
+// Format: 0 | Folder: Data quality | Hidden helper
+// Visual-level filter for the checks table (set "is 1"). The table must show the run_date column.
+VAR _latest =
+    CALCULATE ( MAX ( silver_dq_results[run_date] ), REMOVEFILTERS ( silver_dq_results ) )
+RETURN
+    IF ( SELECTEDVALUE ( silver_dq_results[run_date] ) = _latest, 1, 0 )
+
+DQ Status Colour =
+// Format: (text) | Folder: Data quality | Hidden helper
+// Conditional formatting of the status column: Background colour, Format style "Field value".
+SWITCH (
+    SELECTEDVALUE ( silver_dq_results[status] ),
+    "FAIL", "#C62828",
+    "WARN", "#F9A825",
+    "PASS", "#2E7D32"
+)
+
+
+// ==================================================================================================
+// Home table: gold_dim_meter
+// ==================================================================================================
+
+Meter Count =
+// Format: 0 | Folder: Fleet
+COUNTROWS ( gold_dim_meter )
+
+Active Meters =
+// Format: 0 | Folder: Fleet
+CALCULATE ( COUNTROWS ( gold_dim_meter ), gold_dim_meter[status] = "active" ) + 0
+
+Rated Capacity (kW) =
+// Format: #,0 | Folder: Fleet
+// Sum of the meters' rated power.
+SUM ( gold_dim_meter[rated_kw] )
+
+
+// ==================================================================================================
+// Home table: gold_dim_site
+// ==================================================================================================
+
+Site Count =
+// Format: 0 | Folder: Fleet
+COUNTROWS ( gold_dim_site )

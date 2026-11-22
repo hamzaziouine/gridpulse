@@ -84,8 +84,17 @@ print(f"gridpulse {gridpulse.__version__} | run_date {RUN_DATE}")
 dw = store.read("silver_demand_weather_hourly").cache()
 first, last = dw.agg(F.min("est_date"), F.max("est_date")).first()
 dim_date = spark.createDataFrame(date_dimension(first, last + timedelta(days=7)))
-dim_date = dim_date.withColumn("est_date", F.col("est_date").cast("date")).withColumn(
-    "month_start", F.col("month_start").cast("date")
+# pandas gives int64: cast the keys to int so they match the facts' date_key exactly.
+dim_date = (
+    dim_date.withColumn("est_date", F.col("est_date").cast("date"))
+    .withColumn("month_start", F.col("month_start").cast("date"))
+    .withColumn("date_key", F.col("date_key").cast("int"))
+    .withColumn("year", F.col("year").cast("int"))
+    .withColumn("quarter", F.col("quarter").cast("int"))
+    .withColumn("month", F.col("month").cast("int"))
+    .withColumn("day_of_month", F.col("day_of_month").cast("int"))
+    .withColumn("day_of_week", F.col("day_of_week").cast("int"))
+    .withColumn("season_order", F.col("season_order").cast("int"))
 )
 
 hourly = gold.demand_hourly(dw, dim_date).cache()
@@ -114,7 +123,10 @@ tables = {
     "gold_top_peaks": gold.top_peaks(hourly),
     "gold_temp_sensitivity": gold.temp_sensitivity(hourly),
     "gold_sensitivity_yearly": gold.sensitivity_yearly(hourly),
-    "gold_city_weather_daily": gold.city_weather_daily(wx_city),
+    # Weather starts 2019-01-01 00:00Z = 2018-12-31 19:00 EST: keep only days in gold_dim_date.
+    "gold_city_weather_daily": gold.city_weather_daily(wx_city).where(
+        F.col("est_date").between(F.lit(first), F.lit(last + timedelta(days=7)))
+    ),
 }
 for name, df in tables.items():
     print(f"{name}: {store.write(df, name):,} rows")

@@ -1,7 +1,7 @@
 """S3 reference tables (Azure SQL `dbo.sites`, `dbo.customers`, `dbo.meters`): one column spec
 shared by the SQL loader (scripts/load_sql.py) and the local stand-in for the pipeline's
 SQL-to-Lakehouse copy (scripts/run_local.py). sql/001_schema.sql is the T-SQL source of truth;
-tests/unit/test_reference.py checks that the two agree.
+tests/unit/test_dims_lakehouse_guard.py checks that the two agree.
 """
 
 from __future__ import annotations
