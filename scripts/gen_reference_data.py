@@ -1,0 +1,144 @@
+"""L5: generate the S3 reference data (sites, customers, meters) for Azure SQL Database.
+
+Fully synthetic (Faker, seed 2611): emails use the reserved `example.com` domain and phone numbers
+the fictional 555-01xx range, so no row can belong to a real person. Customer name, email, address
+and phone are the PII fields (proposal S3 = Confidential / PII); silver replaces them with a salted
+SHA-256 `customer_hash` (DESIGN D18).
+
+Outputs: data/reference/{sites,customers,meters}.csv and sql/002_seed.sql (T-SQL INSERTs).
+The schema itself is sql/001_schema.sql.
+
+    uv run python scripts/gen_reference_data.py
+"""
+
+from __future__ import annotations
+
+import csv
+import random
+import unicodedata
+from datetime import date, timedelta
+from pathlib import Path
+
+from faker import Faker
+
+ROOT = Path(__file__).resolve().parents[1]
+SEED = 2611
+N_METERS = 50
+
+# 10 Ontario sites (real city coordinates, fictional sites).
+SITES = [
+    (1, "SITE-TOR-01", "Toronto Downtown Substation", "Toronto", 43.65, -79.38, 900),
+    (2, "SITE-TOR-02", "Toronto North Yard", "Toronto", 43.76, -79.41, 750),
+    (3, "SITE-OTT-01", "Ottawa Centre", "Ottawa", 45.42, -75.70, 600),
+    (4, "SITE-MIS-01", "Mississauga Industrial Park", "Mississauga", 43.59, -79.64, 800),
+    (5, "SITE-HAM-01", "Hamilton Steel District", "Hamilton", 43.26, -79.87, 950),
+    (6, "SITE-LON-01", "London East", "London", 42.98, -81.25, 400),
+    (7, "SITE-KIT-01", "Kitchener Tech Campus", "Kitchener", 43.45, -80.49, 450),
+    (8, "SITE-WIN-01", "Windsor Riverside", "Windsor", 42.30, -83.02, 350),
+    (9, "SITE-SUD-01", "Sudbury Mine Road", "Sudbury", 46.49, -80.99, 500),
+    (10, "SITE-KIN-01", "Kingston Waterfront", "Kingston", 44.23, -76.49, 300),
+]
+TARIFFS = ["TOU", "ULO", "TIERED"]  # Ontario residential/small business price plans
+SEGMENTS = ["residential", "small_business", "commercial", "industrial"]
+
+
+def ascii_slug(s: str) -> str:
+    return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
+
+
+def postal(code: str) -> str:
+    """Canadian postal code in the standard `A1A 1A1` form."""
+    c = code.replace(" ", "").upper()
+    return f"{c[:3]} {c[3:]}"
+
+
+def build() -> tuple[list[dict], list[dict], list[dict]]:
+    fake = Faker("en_CA")
+    Faker.seed(SEED)
+    rng = random.Random(SEED)
+    sites = [
+        {
+            "site_id": i,
+            "site_code": code,
+            "site_name": name,
+            "city": city,
+            "latitude": lat,
+            "longitude": lon,
+            "capacity_kw": cap,
+        }
+        for i, code, name, city, lat, lon, cap in SITES
+    ]
+    customers, meters = [], []
+    for n in range(1, N_METERS + 1):
+        first, last = fake.first_name(), fake.last_name()
+        site = sites[(n - 1) % len(sites)]
+        customers.append(
+            {
+                "customer_id": n,
+                "full_name": f"{first} {last}",
+                "email": f"{ascii_slug(first)}.{ascii_slug(last)}{n:02d}@example.com",
+                "phone": f"+1-416-555-01{n % 100:02d}",
+                "street_address": fake.street_address(),
+                "city": site["city"],
+                "postal_code": postal(fake.postalcode_in_province("ON")),
+                "segment": rng.choice(SEGMENTS),
+                "created_at": (date(2018, 1, 1) + timedelta(days=rng.randrange(2500))).isoformat(),
+            }
+        )
+        meters.append(
+            {
+                "meter_id": f"MTR-{n:04d}",
+                "site_id": site["site_id"],
+                "customer_id": n,
+                "install_date": str(date(2015, 1, 1) + timedelta(days=rng.randrange(3600))),
+                "tariff": rng.choice(TARIFFS),
+                "rated_kw": rng.choice([10, 25, 50, 100, 250]),
+                "status": "active" if n % 17 else "maintenance",
+            }
+        )
+    return sites, customers, meters
+
+
+def write_csv(path: Path, rows: list[dict]) -> None:
+    with path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
+
+
+def sql_value(v: object) -> str:
+    if isinstance(v, int | float):
+        return str(v)
+    return "N'" + str(v).replace("'", "''") + "'"
+
+
+def inserts(table: str, rows: list[dict]) -> list[str]:
+    cols = ", ".join(rows[0])
+    return [
+        # Offline seed-file generation from constants and Faker output, never user input.
+        f"INSERT INTO dbo.{table} ({cols}) VALUES ({', '.join(sql_value(v) for v in r.values())});"  # noqa: S608
+        for r in rows
+    ]
+
+
+def main() -> None:
+    sites, customers, meters = build()
+    ref = ROOT / "data" / "reference"
+    ref.mkdir(parents=True, exist_ok=True)
+    for name, rows in (("sites", sites), ("customers", customers), ("meters", meters)):
+        write_csv(ref / f"{name}.csv", rows)
+    lines = [
+        "-- GridPulse S3 seed data. Generated by scripts/gen_reference_data.py (Faker seed 2611).",
+        "-- Fully synthetic: example.com emails, 555-01xx phones. Re-runnable (deletes first).",
+        "SET NOCOUNT ON;",
+        "DELETE FROM dbo.meters; DELETE FROM dbo.customers; DELETE FROM dbo.sites;",
+        *inserts("sites", sites),
+        *inserts("customers", customers),
+        *inserts("meters", meters),
+    ]
+    (ROOT / "sql" / "002_seed.sql").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"sites={len(sites)} customers={len(customers)} meters={len(meters)}")
+
+
+if __name__ == "__main__":
+    main()

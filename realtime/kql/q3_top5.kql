@@ -1,0 +1,6 @@
+// Q3 (bonus): top 5 sites by consumption over the last 15 minutes.
+meter_readings
+| where ts > ago(15m)
+| summarize avg_kw = avg(kw) by site_id, meter_id
+| summarize site_kw = sum(avg_kw) by site_id
+| top 5 by site_kw desc

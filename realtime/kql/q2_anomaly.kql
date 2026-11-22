@@ -1,0 +1,14 @@
+// Q2 (abnormal demand, DESIGN D11/D12): a site's latest 1-minute load above its own
+// trailing 1-hour mean + 3 sigma. Feeds the Real-Time Dashboard tile and the Activator alert.
+let per_minute = meter_readings
+    | where ts > ago(65m)
+    | summarize site_kw = sum(kw) by site_id, minute = bin(ts, 1m);
+let baseline = per_minute
+    | where minute < bin(now(), 1m) - 1m
+    | summarize mean_kw = avg(site_kw), sd_kw = stdev(site_kw), n = count() by site_id;
+per_minute
+| where minute == bin(now(), 1m) - 1m          // last complete minute
+| join kind=inner baseline on site_id
+| where n >= 10 and site_kw > mean_kw + 3 * sd_kw
+| project minute, site_id, site_kw, mean_kw, threshold_kw = mean_kw + 3 * sd_kw,
+    z = (site_kw - mean_kw) / sd_kw

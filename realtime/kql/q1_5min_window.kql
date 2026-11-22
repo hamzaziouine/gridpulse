@@ -1,0 +1,8 @@
+// Q1 (mandatory time-window query, DESIGN D11): energy per site in 5-minute tumbling windows, last hour.
+// kWh per window = mean kW x (5/60) h, per meter, summed per site.
+meter_readings
+| where ts > ago(1h)
+| summarize avg_kw = avg(kw) by site_id, meter_id, window = bin(ts, 5m)
+| summarize site_kw = sum(avg_kw), site_kwh = sum(avg_kw) * 5.0 / 60.0, meters = dcount(meter_id)
+    by site_id, window
+| order by window desc, site_id asc

@@ -1,0 +1,11 @@
+site_id,site_code,site_name,city,latitude,longitude,capacity_kw
+1,SITE-TOR-01,Toronto Downtown Substation,Toronto,43.65,-79.38,900
+2,SITE-TOR-02,Toronto North Yard,Toronto,43.76,-79.41,750
+3,SITE-OTT-01,Ottawa Centre,Ottawa,45.42,-75.7,600
+4,SITE-MIS-01,Mississauga Industrial Park,Mississauga,43.59,-79.64,800
+5,SITE-HAM-01,Hamilton Steel District,Hamilton,43.26,-79.87,950
+6,SITE-LON-01,London East,London,42.98,-81.25,400
+7,SITE-KIT-01,Kitchener Tech Campus,Kitchener,43.45,-80.49,450
+8,SITE-WIN-01,Windsor Riverside,Windsor,42.3,-83.02,350
+9,SITE-SUD-01,Sudbury Mine Road,Sudbury,46.49,-80.99,500
+10,SITE-KIN-01,Kingston Waterfront,Kingston,44.23,-76.49,300

@@ -1,0 +1,9 @@
+// GridPulse Eventhouse eh_gridpulse, KQL database: table + JSON mapping + retention (PLAN L7, T6.1).
+// Run each command separately (KQL queryset or `.execute database script`).
+.create-merge table meter_readings (ts: datetime, meter_id: string, site_id: int, kw: real, voltage: real, status: string)
+
+.create-or-alter table meter_readings ingestion json mapping 'meter_readings_json'
+'[{"column":"ts","path":"$.ts","datatype":"datetime"},{"column":"meter_id","path":"$.meter_id","datatype":"string"},{"column":"site_id","path":"$.site_id","datatype":"int"},{"column":"kw","path":"$.kw","datatype":"real"},{"column":"voltage","path":"$.voltage","datatype":"real"},{"column":"status","path":"$.status","datatype":"string"}]'
+
+// 7 days is plenty for a live demo and keeps the trial capacity light.
+.alter-merge table meter_readings policy retention softdelete = 7d recoverability = disabled

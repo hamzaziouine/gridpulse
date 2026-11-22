@@ -1,0 +1,19 @@
+# Raw source files: the IESO licence forbids redistributing bulk files
+data/raw/
+.venv/
+.env
+*.env
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+mlruns/
+# Local lakehouse emulation, model artefacts, rendered deploy files, local ids
+data/lakehouse/
+mlartifacts/
+build/
+dist/
+*.local.json
+realtime/anomaly.json
+realtime/anomaly.done.json
+# Office/Power BI temp files
+~$*

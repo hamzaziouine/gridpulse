@@ -1,0 +1,51 @@
+customer_id,full_name,email,phone,street_address,city,postal_code,segment,created_at
+1,Robert Campbell,robert.campbell01@example.com,+1-416-555-0101,590 Rachael Ville,Toronto,N2H 7V6,industrial,2021-03-02
+2,John Blanchard,john.blanchard02@example.com,+1-416-555-0102,976 Tracy Walk,Toronto,P1N 2N6,residential,2024-06-08
+3,Carlos Ritter,carlos.ritter03@example.com,+1-416-555-0103,61750 James Locks,Ottawa,P8G 3E9,residential,2021-05-19
+4,Stephanie Velazquez,stephanie.velazquez04@example.com,+1-416-555-0104,631 Davis Glen Apt. 655,Mississauga,K1V 5R5,residential,2022-08-14
+5,Tiffany Cole,tiffany.cole05@example.com,+1-416-555-0105,23116 David Loop Apt. 315,Hamilton,K1E 8R1,residential,2023-06-04
+6,Joshua Gonzalez,joshua.gonzalez06@example.com,+1-416-555-0106,2250 Andrew Ways,London,N9X 7M4,industrial,2021-01-03
+7,Anna Tate,anna.tate07@example.com,+1-416-555-0107,30145 Richard Mews,Kitchener,N5A 6J8,commercial,2024-07-04
+8,Michael Cox,michael.cox08@example.com,+1-416-555-0108,6243 Wang Coves Apt. 165,Windsor,L6H 7N5,commercial,2018-10-02
+9,Debra Bennett,debra.bennett09@example.com,+1-416-555-0109,9597 Eric Street Apt. 319,Sudbury,L5G 6L1,residential,2022-04-14
+10,Wesley Rodriguez,wesley.rodriguez10@example.com,+1-416-555-0110,741 Joseph Springs Apt. 205,Kingston,N8V 8B9,residential,2023-10-01
+11,Linda Martin,linda.martin11@example.com,+1-416-555-0111,10912 Sean Walk Apt. 152,Toronto,L2A 3E6,industrial,2021-06-17
+12,Kevin Welch,kevin.welch12@example.com,+1-416-555-0112,792 Rodney Port,Toronto,M7H 4P3,residential,2023-04-28
+13,Christine Pacheco,christine.pacheco13@example.com,+1-416-555-0113,10449 Amber Fork Suite 294,Ottawa,N7T 7R8,industrial,2020-07-21
+14,Tony Johnson,tony.johnson14@example.com,+1-416-555-0114,578 Amber Ranch Apt. 266,Mississauga,N1K 6V4,residential,2020-08-13
+15,Deborah Taylor,deborah.taylor15@example.com,+1-416-555-0115,22401 Smith Locks Apt. 467,Hamilton,P3C 6Y7,commercial,2022-02-04
+16,Adrian Wu,adrian.wu16@example.com,+1-416-555-0116,091 Cynthia Expressway Apt. 913,London,K7A 4M5,industrial,2022-05-24
+17,Peter Hansen,peter.hansen17@example.com,+1-416-555-0117,93364 Walker Orchard,Kitchener,P3J 5H7,commercial,2021-01-19
+18,Joel Lucas,joel.lucas18@example.com,+1-416-555-0118,27318 Elizabeth Cove,Windsor,K8H 1B9,industrial,2019-11-19
+19,Amy Fitzgerald,amy.fitzgerald19@example.com,+1-416-555-0119,256 Henry Divide Apt. 541,Sudbury,N8G 5B4,residential,2022-08-26
+20,Nicholas Huynh,nicholas.huynh20@example.com,+1-416-555-0120,9793 Fox Meadows,Kingston,K7J 8V2,industrial,2019-03-24
+21,Hannah Mccall,hannah.mccall21@example.com,+1-416-555-0121,5914 Brown Camp Suite 176,Toronto,K1L 6N1,commercial,2019-03-20
+22,Christopher Adams,christopher.adams22@example.com,+1-416-555-0122,19736 Matthew Ports,Toronto,M2P 7B9,industrial,2018-03-17
+23,Ashley James,ashley.james23@example.com,+1-416-555-0123,13047 Weber Ramp,Ottawa,K5M 2E8,residential,2022-02-07
+24,Jason Davis,jason.davis24@example.com,+1-416-555-0124,524 James Plains,Mississauga,M9C 1X4,residential,2019-02-27
+25,Faith Fleming,faith.fleming25@example.com,+1-416-555-0125,014 Blake Hill Apt. 022,Hamilton,P7A 2C3,commercial,2024-03-26
+26,Stephanie Jones,stephanie.jones26@example.com,+1-416-555-0126,1903 Cook Orchard,London,L5G 4J8,industrial,2020-09-01
+27,Jerry Williams,jerry.williams27@example.com,+1-416-555-0127,7438 Perez Brook Apt. 275,Kitchener,L5S 8A4,residential,2019-04-17
+28,Nicole Marsh,nicole.marsh28@example.com,+1-416-555-0128,488 Caleb Knolls,Windsor,P5K 1G7,residential,2022-06-30
+29,Matthew Sanchez,matthew.sanchez29@example.com,+1-416-555-0129,167 Pamela Prairie,Sudbury,P5M 6G3,industrial,2018-04-03
+30,Ryan James,ryan.james30@example.com,+1-416-555-0130,81984 Taylor Roads Apt. 432,Kingston,M1P 3S8,commercial,2023-02-12
+31,Jason Stewart,jason.stewart31@example.com,+1-416-555-0131,96146 Kristin Island Apt. 033,Toronto,L9P 9C3,industrial,2022-08-10
+32,Richard Pugh,richard.pugh32@example.com,+1-416-555-0132,7373 Hansen Prairie,Toronto,P1R 5H5,small_business,2024-08-31
+33,Michael Walker,michael.walker33@example.com,+1-416-555-0133,64679 Cook Trail,Ottawa,N2Y 5V7,small_business,2018-12-18
+34,Robert Padilla,robert.padilla34@example.com,+1-416-555-0134,01566 Dyer Mountain Suite 306,Mississauga,P8V 6L4,industrial,2020-09-25
+35,Austin Ramirez,austin.ramirez35@example.com,+1-416-555-0135,76659 Mccoy Village Apt. 579,Hamilton,N1A 9T1,industrial,2020-11-19
+36,Victor Wilson,victor.wilson36@example.com,+1-416-555-0136,458 Kimberly Mall,London,L5S 5C3,residential,2024-09-25
+37,Amanda Ward,amanda.ward37@example.com,+1-416-555-0137,429 Hill Summit,Kitchener,N2P 5X8,commercial,2024-08-07
+38,Anthony Williams,anthony.williams38@example.com,+1-416-555-0138,76061 Ramirez Throughway,Windsor,P3H 1A1,small_business,2023-01-03
+39,Susan Wade,susan.wade39@example.com,+1-416-555-0139,57383 Rachel Point Apt. 120,Sudbury,L3S 1H6,small_business,2020-04-20
+40,Samuel Rivera,samuel.rivera40@example.com,+1-416-555-0140,46919 Robert Brook,Kingston,N5M 4X8,commercial,2020-10-16
+41,Matthew Gilmore,matthew.gilmore41@example.com,+1-416-555-0141,22472 Smith Prairie Suite 998,Toronto,P2G 9B8,commercial,2021-09-17
+42,Allen Martin,allen.martin42@example.com,+1-416-555-0142,136 William Loop Suite 473,Toronto,P6Y 3S8,industrial,2023-08-06
+43,Richard Ortiz,richard.ortiz43@example.com,+1-416-555-0143,20354 Cannon Shores,Ottawa,M4H 4L5,commercial,2023-11-11
+44,Jesse Cummings,jesse.cummings44@example.com,+1-416-555-0144,36728 Klein Orchard Suite 012,Mississauga,P7J 8R4,residential,2021-09-19
+45,Roger Bean,roger.bean45@example.com,+1-416-555-0145,16459 George Plaza,Hamilton,P9K 3Y5,residential,2023-07-20
+46,Andrew Jones,andrew.jones46@example.com,+1-416-555-0146,82027 Andrew Mews Apt. 188,London,M3G 5Y9,small_business,2021-08-27
+47,Amanda Anderson,amanda.anderson47@example.com,+1-416-555-0147,164 Haynes Villages Apt. 946,Kitchener,P6N 2K9,residential,2019-12-27
+48,Marissa Phelps,marissa.phelps48@example.com,+1-416-555-0148,5154 Cheryl Ridge Suite 346,Windsor,L8S 2Y7,small_business,2019-05-25
+49,Christina Sullivan,christina.sullivan49@example.com,+1-416-555-0149,93476 Johnson Estates Apt. 553,Sudbury,N5M 2S8,small_business,2018-01-26
+50,Philip Hunt,philip.hunt50@example.com,+1-416-555-0150,61415 Fowler Avenue Suite 513,Kingston,M5L 5Y4,small_business,2021-07-04
