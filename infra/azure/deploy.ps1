@@ -55,6 +55,10 @@ if (-not $WhatIf) {
         --query value -o tsv --only-show-errors
     if ($r.ok -and $r.text) {
         $sqlPwd = $r.text; Write-Host 'exists (reused)'
+    } elseif ($r.text -notmatch 'SecretNotFound|was not found in this key vault') {
+        # Any other failure (no role yet, expired login, network): stop. Generating a new password
+        # here would overwrite the one the existing SQL server was created with.
+        throw "cannot read $($Cfg.SqlPwdSecret) from $($Cfg.KeyVault), and the answer is not 'secret not found', so nothing was generated: $($r.text)"
     } else {
         $sqlPwd = New-StrongPassword
         # Pass the value through a temp file so it never appears in the process command line.
@@ -75,6 +79,8 @@ if (-not $WhatIf) {
         --query id -o tsv --only-show-errors
     if ($r.ok -and $r.text) {
         Write-Host 'exists (kept: a new salt would change every customer_hash)'
+    } elseif ($r.text -notmatch 'SecretNotFound|was not found in this key vault') {
+        throw "cannot read $($Cfg.SaltSecret) from $($Cfg.KeyVault), and the answer is not 'secret not found', so no new salt was generated: $($r.text)"
     } else {
         $bytes = New-Object byte[] 32
         [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)

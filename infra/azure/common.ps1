@@ -63,8 +63,9 @@ function Assert-Context {
 }
 
 function New-StrongPassword {
-    # 28 chars, all four SQL complexity classes, cryptographic RNG.
-    $sets = @('ABCDEFGHJKLMNPQRSTUVWXYZ', 'abcdefghijkmnopqrstuvwxyz', '23456789', '!#%+-=?_')
+    # 28 chars, all four SQL complexity classes, cryptographic RNG. No percent sign: the password
+    # goes once through az.cmd (sql server create -p), where cmd.exe would expand %NAME% pairs.
+    $sets = @('ABCDEFGHJKLMNPQRSTUVWXYZ', 'abcdefghijkmnopqrstuvwxyz', '23456789', '!#+-=?_')
     $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
     $pick = {
         param($s)
