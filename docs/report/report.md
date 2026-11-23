@@ -9,7 +9,7 @@ Technical report
 | Institution | Université Internationale de Rabat (UIR), academic year 2026/2027 |
 | Topic | Example 7 of the brief: energy and weather analytics |
 | Team | Hamza ZIOUINE, Mohamed NACIR, Omar MOUNABBIH `[TODO: member 4 if one joins]` |
-| Repository | `[TODO: GitHub URL of the public repository]` |
+| Repository | https://github.com/hamzaziouine/gridpulse |
 | Date | `[TODO: submission date]` |
 | Version | skeleton of 2026-11-22 |
 
