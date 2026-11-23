@@ -14,7 +14,7 @@ Status 2026-11-22: nothing is deployed in Fabric yet, so every timing and expect
 | 6 | One security control, one trade-off | Hamza (member 4 if one joins) | 1:30 | 10:15 to 11:45 |
 | 7 | Limitations, cost, next steps | Omar | 1:15 | 11:45 to 13:00 |
 
-Persona rule during the demo: each member works in their own browser profile signed in with their own account. Omar (Analyst) has no SQL user and no Key Vault access, so he never shows the SQL tables; Nacir (Admin, SQL Entra admin) does.
+Persona rule during the demo: each member works in their own browser profile signed in with their own account. Omar (Analyst) has no SQL user and no Key Vault access, so he never shows the SQL tables; Nacir (Admin) does. On 2026-11-23 the SQL server has no Entra admin (`docs/evidence/rbac.md`), so nobody can sign in to it with an Entra account yet. `[TO DECIDE: set Nacir as SQL Entra admin before the demo, or have him use the gpadmin login with the password from Key Vault]`
 
 ## Pre-demo checklist
 
@@ -33,7 +33,7 @@ The day before:
 
 45 minutes before:
 
-- [ ] Pipeline. The daily schedule fires at 13:15 UTC, which is 14:15 in Morocco (UTC+1), so it would start in the middle of a 14:00 class slot. Run `pl_daily_ingest` by hand now, wait until it is green in the Monitor hub, then switch the schedule off for the rest of the slot and back on after the demo. `[TODO after T3.3: measured duration of a full run on FTL4]`
+- [ ] Pipeline. The daily schedule fires at 13:15 UTC, which is 14:15 in Morocco (UTC+1), so it would start in the middle of a 14:00 class slot. Run `pl_daily_ingest` by hand now, wait until it is green in the Monitor hub, then switch the schedule off for the rest of the slot and back on after the demo. A full daily run took about 24 and 25 minutes on 2026-11-23 (`docs/evidence/fabric_batch.md`), so start it at least 30 minutes before.
 - [ ] Open the `nb_silver` and `nb_gold` run snapshots of that run (Monitor hub > the run > activity > notebook snapshot) in tabs.
 
 20 minutes before (at least 15 minutes before step 4):
@@ -73,7 +73,7 @@ Hamza, 50 s. In `lh_gridpulse` > Files:
 - `bronze/ieso/PUB_Demand_2026.csv`: one file per year, header lines starting with a backslash, columns `Date, Hour, Market Demand, Ontario Demand`. Hour is hour-ending 1 to 24 in fixed EST all year (no daylight saving), which we convert to UTC.
 - `bronze/openmeteo/2026-10.json`: one object per city with parallel hourly arrays; 5 cities, 9 variables. It is the Historical Forecast API: weather as it was forecast at the time, not as observed.
 
-Nacir, 35 s. In the portal Query editor (signed in as Entra admin):
+Nacir, 35 s. In the portal Query editor (needs the SQL Entra admin of the persona rule above, not set on 2026-11-23):
 
 ```sql
 SELECT TOP 3 * FROM dbo.meters;
@@ -105,11 +105,11 @@ Fallback: screenshot of the pipeline canvas and of the Monitor hub with the earl
 
 ## Step 3. Spark notebook and curated Delta output (Hamza, 2:00)
 
-1. Open the `nb_silver` snapshot of the pre-demo run. The `silver_dq_results` display shows 17 checks. In the local run of 2026-11-22: 14 PASS, 3 WARN, 0 FAIL. The 3 WARN are known conditions:
+1. Open the `nb_silver` snapshot of the pre-demo run. The `silver_dq_results` display shows 21 checks in Fabric (17 plus 4 on the Previous Runs weather). Cloud runs of 2026-11-23: 18 PASS, 3 WARN, 0 FAIL (the local run of 2026-11-22 had 17 checks: 14 PASS, 3 WARN, 0 FAIL). The 3 WARN are known conditions:
    - `hourly_gaps`: IESO never published 2025-05-01 hour-ending 1 (market renewal go-live);
    - `hours_per_day_24`: the same day therefore has 23 hours;
    - `weather_coverage`: the newest 6 demand hours wait for the next weather file.
-   A FAIL would stop `nb_silver` before it overwrites silver, and the pipeline would send its failure mail. `[TODO after T4.1: the Fabric run's counts, they can differ slightly]`
+   A FAIL would stop `nb_silver` before it overwrites silver, and the pipeline would fail. The failure mail needs `con_outlook_alerts`, which does not exist yet.
 2. Open the `nb_gold` snapshot: one line per gold table with its row count, then the five highest hours on record.
 3. In the `lh_gridpulse` SQL analytics endpoint, run the two saved queries:
 
@@ -173,17 +173,17 @@ Fallback: the report screenshots, or the downloaded PBIX opened in Power BI Desk
 
 ## Step 6. One security control and one trade-off (Hamza, or member 4; 1:30)
 
-Control, live (needs Hamza's `az` session):
+Control, live (needs Hamza's `az` session; since 2026-11-23 he holds Contributor and Resource Policy Contributor on the RG, but the `-Test` so far ran only under Nacir's session. `[TO CONFIRM: one rehearsal run of the -Test as Hamza]`):
 
 ```powershell
 powershell -File infra\azure\policy_assignments.ps1 -Test
 ```
 
-Expected output: the two assignments `require-tag-project` and `require-tag-owner`, then `DENIED by policy, as expected:` and a line with `RequestDisallowedByPolicy`. The storage account was refused; nothing was created. Then one sentence on the personas: "I am the Data Engineer: I can deploy into this resource group but not grant roles. Omar, the Analyst, gets 403 on Key Vault and only sees gold through the semantic model."
+Expected output: the two assignments `require-tag-project` and `require-tag-owner`, then `DENIED by policy, as expected:` and a line with `RequestDisallowedByPolicy`. The storage account was refused; nothing was created. Then one sentence on the personas: "I am the Data Engineer: I can deploy into this resource group but not grant roles. Omar, the Analyst, gets 403 on Key Vault and only sees gold through the semantic model." Both claims are untested on 2026-11-23 (`docs/MANUAL_STEPS.md`, step 7); say them only after the check.
 
 Trade-off: one Lakehouse with `bronze_`, `silver_`, `gold_` prefixes instead of three (DESIGN D6). Gain: one Direct Lake source, a third of the setup, fits the trial. Cost: a workspace role covers every layer, including `bronze_customers` with PII. We compensate by hashing customers in silver and giving the Analyst access through the semantic model only; in production we would put bronze in its own Lakehouse or workspace.
 
-Fallback: `docs/evidence/policy.md` (saved output of the same command).
+Fallback: `docs/evidence/azure_foundation.md`, section 2 (saved output of the same command).
 
 ## Step 7. Limitations, cost, next steps (Omar, 1:15)
 

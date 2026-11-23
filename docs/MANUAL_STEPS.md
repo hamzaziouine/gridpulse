@@ -4,13 +4,14 @@ These are the steps Fabric only lets a person do in the browser, in the order th
 
 Status on 2026-11-23:
 - The Azure foundation is deployed and verified (`docs/evidence/azure_foundation.md`).
-- Nothing exists in Fabric yet. Step 0 is the blocker.
+- `ws_gridpulse` exists on a trial capacity that belongs to a classmate outside the team, and the batch pipelines have run (`docs/evidence/fabric_batch.md`). Step 0 is no longer a blocker; it stays below in case the workspace has to move to Nacir's own trial.
+- Steps 1 to 7 are not done yet.
 
-Owners: **Nacir** = Admin persona (subscription Owner, trial owner, workspace Admin). **Hamza** = Data Engineer (workspace Member). **Omar** = Analyst (workspace Viewer).
+Owners: **Nacir** = Admin persona (subscription Owner, workspace Member). **Hamza** = Data Engineer (workspace Admin, because he created the workspace). **Omar** = Analyst (workspace Viewer). Roles as deployed: `docs/evidence/rbac.md`. Nobody in the team owns the capacity.
 
 ---
 
-## 0. Fabric trial capacity (Nacir) BLOCKER
+## 0. Fabric trial capacity (Nacir) (only if the workspace moves off the classmate's capacity)
 
 On 2026-11-23, Nacir's login (the one used for the deployment) saw only the 7 capacities that already existed on 11-06:
 - 6 FTL4 trials created between 10-19 and 10-22;
@@ -111,7 +112,7 @@ Prerequisites:
 
 ## 7. Check: can a workspace Viewer read `bronze_customers` (PII)? (Omar + Hamza)
 
-This could not be tested on 2026-11-23 because there is no workspace yet. In Fabric, workspace Viewers are allowed to query a Lakehouse SQL analytics endpoint, so the expected answer is **yes**, which would be a finding.
+Not tested yet. The workspace and `bronze_customers` (50 rows) exist since 2026-11-23, and Omar is Viewer, so the test can run now. In Fabric, workspace Viewers are allowed to query a Lakehouse SQL analytics endpoint, so the expected answer is **yes**, which would be a finding.
 
 1. Omar, as **Viewer**: `ws_gridpulse` > `lh_gridpulse` > switch to **SQL analytics endpoint**.
    - New SQL query: `SELECT TOP 5 full_name, email FROM dbo.bronze_customers;`

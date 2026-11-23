@@ -1,6 +1,6 @@
 # Resource inventory and cleanup (deliverable 7)
 
-Planned Azure and Fabric resources of GridPulse, with region, size, cost estimate, how each one gets created, its status, and how it gets removed. Status as of 2026-11-23: the Azure foundation is deployed (Key Vault, two secrets, SQL server, firewall, free-offer database with the reference rows, two tag policies), all under Nacir's account. Evidence: `docs/evidence/azure_foundation.md`. Nothing exists in Fabric yet.
+Planned Azure and Fabric resources of GridPulse, with region, size, cost estimate, how each one gets created, its status, and how it gets removed. Status as of 2026-11-23: the Azure foundation is deployed (Key Vault, two secrets, SQL server, firewall, free-offer database with the reference rows, two tag policies), all under Nacir's account. Evidence: `docs/evidence/azure_foundation.md`. The Fabric workspace and its items were created on 2026-11-23 under Hamza's account, on a trial capacity that belongs to a classmate outside the team (`docs/evidence/fabric_batch.md`).
 
 Cost estimates come from DESIGN section 3. Subscription: "Azure for Students" (owner Mohamed NACIR; the subscription and tenant ids are kept in the git-ignored `infra/local.settings.json`). Tags on every Azure resource: `project=cdda-gridpulse`, `owner=hamza.ziouine`, `course=CDDA-2627`.
 
@@ -9,7 +9,7 @@ Cost estimates come from DESIGN section 3. Subscription: "Azure for Students" (o
 | Name | Type | Region | SKU / capacity | Monthly cost estimate | Created by | Status 2026-11-23 | Cleanup action |
 |---|---|---|---|---|---|---|---|
 | `rg-hz2611-cdda` | Resource group | germanywestcentral | n/a | $0 | created 2026-11-06 under Nacir's account | exists | deleted by `infra/azure/cleanup.ps1` (with everything in it) |
-| `budget-cdda-20usd` | Cost Management budget (RG scope) | n/a | $20 per month, 2026-11-01 to 2027-03-31; mails at 50 % and 100 % actual, 100 % forecast, to Hamza and Nacir | $0 | created 2026-11-06 under Nacir's account | exists (spend 0.00 USD on 2026-11-06) | deleted with the RG |
+| `budget-cdda-20usd` | Cost Management budget (RG scope) | n/a | $20 per month, 2026-11-01 to 2027-03-31; mails at 50 % and 100 % actual, 100 % forecast, to Hamza and Nacir | $0 | created 2026-11-06 under Nacir's account | exists (spend 0.00 USD on 2026-11-06 and on 2026-11-23) | deleted with the RG |
 | `kv-hz2611-cdda` | Key Vault | germanywestcentral | Standard (default), RBAC authorization, soft delete 7 days, purge protection off | under $0.10 (a few hundred operations) | `infra/azure/deploy.ps1` | created 2026-11-23 | deleted with the RG, then purged by `cleanup.ps1` |
 | `sql-gpadmin-password` | Key Vault secret | (in the vault) | generated, 28 characters | included above | `deploy.ps1` | created 2026-11-23 | removed with the vault |
 | `customer-hash-salt` | Key Vault secret | (in the vault) | 32 random bytes (hex), kept on reruns | included above | `deploy.ps1` | created 2026-11-23 | removed with the vault |
@@ -20,35 +20,36 @@ Cost estimates come from DESIGN section 3. Subscription: "Azure for Students" (o
 | `require-tag-project` | Policy assignment (RG scope), built-in `871b6d14-10aa-478d-b590-94f262ecfa99`, deny | n/a | n/a | $0 | `infra/azure/policy_assignments.ps1` | assigned 2026-11-23, denial tested | removed with the RG |
 | `require-tag-owner` | Policy assignment (RG scope), same definition, deny | n/a | n/a | $0 | `policy_assignments.ps1` | assigned 2026-11-23, denial tested | removed with the RG |
 | `sys.regionrestriction` | Policy assignment (subscription scope, inherited) | n/a | allowed: switzerlandnorth, italynorth, denmarkeast, germanywestcentral, polandcentral | $0 | the subscription, not us | exists | none (not ours) |
-| Role assignments: Nacir Key Vault Secrets Officer at RG scope (created 2026-11-23, needed by deploy.ps1); planned: Hamza Contributor + Resource Policy Contributor, Omar Reader (RG); Nacir Key Vault Administrator, Hamza Key Vault Secrets Officer | Azure RBAC | n/a | n/a | $0 | Nacir, commands of PLAN 5.3 | not created yet | removed with the RG |
+| Role assignments at RG scope: Nacir Key Vault Secrets Officer; Hamza Contributor, Resource Policy Contributor, Key Vault Secrets Officer; Omar Reader. Not assigned: Nacir Key Vault Administrator, SQL Entra admin | Azure RBAC | n/a | n/a | $0 | Nacir (the first one under his session from Hamza's laptop, the others by Nacir at 19:25 to 19:26 UTC) | created 2026-11-23 (`docs/evidence/rbac.md`) | removed with the RG |
 | `stgpulsepolicytest` | Storage account used only by the policy test | germanywestcentral | Standard_LRS | $0 | `policy_assignments.ps1 -Test` | refused by the policy on 2026-11-23, never created | none |
 
 ## Fabric (workspace `ws_gridpulse`)
 
-Fabric items have no SKU of their own; they all run on the workspace's capacity. Region = capacity region = Germany West Central.
+Fabric items have no SKU of their own; they all run on the workspace's capacity. Region = capacity region = Germany West Central. Status read back on 2026-11-23 with `fab ls ws_gridpulse.Workspace`.
 
 | Name | Type | Region | SKU / capacity | Monthly cost estimate | Created by | Status 2026-11-23 | Cleanup action |
 |---|---|---|---|---|---|---|---|
-| Nacir's trial capacity | Fabric trial capacity | Germany West Central | FTL4 (4 capacity units), 60 days | $0 | Nacir, Start trial in the Fabric UI | not started yet | expires on its own after 60 days |
-| `ws_gridpulse` | Workspace | Germany West Central | on the FTL4 trial | $0 | `infra/fabric/deploy_fabric.ps1 -CapacityName ... -AssignRoles` (roles need the Admin's login) | not created yet | `fab rm ws_gridpulse.Workspace -f` (Admin), deletes every item below |
-| `lh_gridpulse` | Lakehouse (with its SQL analytics endpoint), folders `Files/bronze/*`, `Files/libs` | same | trial | $0 | `deploy_fabric.ps1` | not created yet | with the workspace |
-| `env_gridpulse` | Environment (gridpulse wheel + `holidays`) | same | trial | $0 | `deploy_fabric.ps1` (`fab import`, publish can take minutes) | not created yet | with the workspace |
-| `nb_bronze`, `nb_silver`, `nb_gold` | Notebooks | same | trial (Spark) | $0 | `deploy_fabric.ps1` from `fabric/*.Notebook` | not created yet (tested locally) | with the workspace |
-| `nb_forecast`, `nb_predict` | Notebooks | same | trial (Spark) | $0 | `deploy_fabric.ps1` | not created yet (files written; local backtest in progress on 2026-11-22) | with the workspace |
-| `pl_daily_ingest` | Data pipeline (14 activities) + daily schedule 13:15 UTC | same | trial | $0 | `deploy_fabric.ps1` (definition from `infra/fabric/gen_pipelines.py`, ids filled by `render.py`) | not created yet | turn the schedule off first, then with the workspace |
-| `pl_backfill` | Data pipeline (one-off, 11 activities) | same | trial | $0 | `deploy_fabric.ps1` | not created yet | with the workspace |
-| `con_ieso_http`, `con_openmeteo_hist`, `con_openmeteo_fc`, `con_openmeteo_prev`, `con_sql_gridpulse` | Fabric connections (tenant-level, outside the workspace) | n/a | n/a | $0 | `deploy_fabric.ps1` (SQL password from Key Vault through a temp file) | not created yet | delete by hand in Settings > Manage connections and gateways; workspace deletion does not remove them |
+| Classmate's trial capacity | Fabric trial capacity | Germany West Central | FTL4 (4 capacity units), created 2026-10-19, 60 days | $0 | a classmate outside the team, not us | in use; expected end around 2026-12-18 (estimate) | not ours: we only move `ws_gridpulse` off it or delete the workspace |
+| `ws_gridpulse` | Workspace | Germany West Central | on the FTL4 trial | $0 | `infra/fabric/deploy_fabric.ps1 -CapacityName ... -AssignRoles`, signed in as Hamza | created 2026-11-23; Hamza Admin, Nacir Member, Omar Viewer | `fab rm ws_gridpulse.Workspace -f` (Admin), deletes every item below |
+| `lh_gridpulse` | Lakehouse (with its SQL analytics endpoint), folders `Files/bronze/*`, `Files/libs` | same | trial | $0 | `deploy_fabric.ps1` | created 2026-11-23; 30 Delta tables after the backfill and two daily runs | with the workspace |
+| `env_gridpulse` | Environment (gridpulse wheel + `holidays`) | same | Runtime 1.3, starter pool, 4-core driver and executors, 1 to 2 executors | $0 | `deploy_fabric.ps1` (`fab import`, publish can take minutes) | created and published 2026-11-23 | with the workspace |
+| `nb_bronze`, `nb_silver`, `nb_gold` | Notebooks | same | trial (Spark) | $0 | `deploy_fabric.ps1` from `fabric/*.Notebook` | created 2026-11-23, run in the backfill and two daily runs | with the workspace |
+| `nb_forecast`, `nb_predict` | Notebooks | same | trial (Spark) | $0 | `deploy_fabric.ps1` | created 2026-11-23; `nb_forecast` run once (backfill), `nb_predict` twice | with the workspace |
+| `pl_daily_ingest` | Data pipeline + daily schedule 13:15 UTC, 2026-11-24 to 2026-12-17 | same | trial | $0 | `deploy_fabric.ps1` (definition from `infra/fabric/gen_pipelines.py`, ids filled by `render.py`) | created 2026-11-23, run twice by hand; no failure mail yet; first scheduled run pending | turn the schedule off first, then with the workspace |
+| `pl_backfill` | Data pipeline (one-off) | same | trial | $0 | `deploy_fabric.ps1` | created 2026-11-23, run once (63.5 min) | with the workspace |
+| `con_ieso_http`, `con_openmeteo_hist`, `con_openmeteo_fc`, `con_openmeteo_prev`, `con_sql_gridpulse` | Fabric connections (tenant-level, outside the workspace), owned by Hamza | n/a | n/a | $0 | `deploy_fabric.ps1` (SQL password from Key Vault through a temp file) | created 2026-11-23 | delete by hand in Settings > Manage connections and gateways; workspace deletion does not remove them |
 | `con_outlook_alerts` | Fabric connection, OAuth (Office 365 Outlook) | n/a | n/a | $0 | UI only (T3.6); rerun the deploy afterwards so the mail activity is added | not created yet | delete by hand, as above |
-| `es_meters` | Eventstream (custom endpoint source, Eventhouse destination) | same | trial | $0 | empty item by `deploy_fabric.ps1`; source and destination in the UI | not created yet | with the workspace |
-| `eh_gridpulse` | Eventhouse + KQL database, table `meter_readings` (7-day retention) | same | trial | $0 | `deploy_fabric.ps1` + `infra/fabric/run_kql.py` (runs `realtime/kql/00_tables.kql`) | not created yet | with the workspace |
+| `es_meters` | Eventstream (custom endpoint source, Eventhouse destination) | same | trial | $0 | empty item by `deploy_fabric.ps1`; source and destination in the UI | created 2026-11-23, empty (no source, no destination) | with the workspace |
+| `eh_gridpulse` | Eventhouse + KQL database, table `meter_readings` (7-day retention) | same | trial | $0 | `deploy_fabric.ps1` + `infra/fabric/run_kql.py` (runs `realtime/kql/00_tables.kql`) | created 2026-11-23; table and mapping exist, 0 rows | with the workspace |
 | `kq_gridpulse` | KQL queryset (Q1, Q2, Q3) | same | trial | $0 | UI, from `realtime/kql/*.kql` | not created yet | with the workspace |
 | `rtd_gridpulse` | Real-Time Dashboard | same | trial | $0 | UI (T6.5) | not created yet | with the workspace |
 | `act_abnormal_demand` | Activator | same | trial | $0 | UI (T6.6) | not created yet | stop the rule first (no stray mails), then with the workspace |
-| `exp_gridpulse_forecast` | ML experiment (MLflow) | same | trial | $0 | created by `nb_forecast` | not created yet | with the workspace; metrics exported to `docs/evidence/` first |
-| `gridpulse_lgbm` | ML model (registry) | same | trial | $0 | registered by `nb_forecast` | not created yet | with the workspace |
+| `exp_gridpulse_forecast` | ML experiment (MLflow) | same | trial | $0 | created by `nb_forecast` | created 2026-11-23 (backfill) | with the workspace; metrics exported to `docs/evidence/` first |
+| `nb_forecast` (ML experiment) | ML experiment created by Fabric as the notebook's default | same | trial | $0 | Fabric, automatically | created 2026-11-23, not used by our code | with the workspace |
+| `gridpulse_lgbm` | ML model (registry) | same | trial | $0 | registered by `nb_forecast` | created 2026-11-23, version 1 used by `nb_predict` | with the workspace |
 | `sm_gridpulse` | Semantic model, Direct Lake | same | trial | $0 | UI (T7.1), then TMDL export | not created yet | with the workspace |
 | `rpt_gridpulse` | Power BI report | same | trial | $0 | UI (Omar, T7.2) | not created yet | with the workspace; PBIX copy stays in `powerbi/` |
-| GitHub connection for Git integration (if used) | Fabric connection + fine-grained GitHub token | n/a | n/a | $0 | Fabric API (T1F.5) | not created yet | delete the connection, revoke the token on GitHub |
+| GitHub connection for Git integration (if used) | Fabric connection + fine-grained GitHub token | n/a | n/a | $0 | Fabric API (T1F.5) | not created (`[TO DECIDE: set up Git integration or drop it]`) | delete the connection, revoke the token on GitHub |
 
 ## Outside Azure and Fabric
 
@@ -74,7 +75,7 @@ Cleanup happens only after the grade is published (PLAN T12.2), with Nacir's agr
    - download `rpt_gridpulse` as PBIX into `powerbi/`;
    - MLflow metrics into `docs/evidence/model_metrics.md`;
    - screenshots into `docs/evidence/`.
-5. Delete the workspace (Nacir, workspace Admin): `fab rm ws_gridpulse.Workspace -f`. Check that `fab ls` no longer lists it.
+5. Delete the workspace (Hamza, workspace Admin): `fab rm ws_gridpulse.Workspace -f`. Check that `fab ls` no longer lists it.
 6. Delete the Fabric connections, which live outside the workspace: `con_ieso_http`, `con_openmeteo_hist`, `con_openmeteo_fc`, `con_openmeteo_prev`, `con_sql_gridpulse`, `con_outlook_alerts`, and the GitHub connection if one was made. Revoke the GitHub token.
 7. Delete the Azure resource group: `powershell -File infra\azure\cleanup.ps1`. The script refuses any RG other than `rg-hz2611-cdda` and the protected `TP6` and `tp1`, lists what it will delete, and asks for the RG name to be typed back. It removes the SQL server and database, the Key Vault, the policy and role assignments at RG scope, and the budget.
 8. Key Vault purge. `cleanup.ps1` runs `az keyvault purge -n kv-hz2611-cdda` but ignores its errors. Check with:
