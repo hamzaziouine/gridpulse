@@ -8,12 +8,12 @@ Technical report
 | Instructor | Pr. Ibrahim RAHHAL |
 | Institution | Université Internationale de Rabat (UIR), academic year 2026/2027 |
 | Topic | Example 7 of the brief: energy and weather analytics |
-| Team | Hamza ZIOUINE, Mohamed NACIR, Omar MOUNABBIH `[TODO: member 4 if one joins]` |
+| Team | Hamza ZIOUINE, Mohamed NACIR, Omar MOUNABBIH (the fourth member of the proposal never joined) `[TO CONFIRM: fourth member out for good]` |
 | Repository | https://github.com/hamzaziouine/gridpulse |
 | Date | `[TODO: submission date]` |
-| Version | skeleton of 2026-11-22 |
+| Version | draft of 2026-11-23 |
 
-Status of this draft (2026-11-22). The code was tested locally only: the five notebooks (bronze, silver, gold, forecast, predict) ran on the real raw files with a local Spark 3.5. Azure update (2026-11-23): the Azure foundation is deployed and tested in Azure: Key Vault, Azure SQL free-offer database with the reference data, and the two tag policies, with their live denial test (`docs/evidence/azure_foundation.md`). Nothing exists in Fabric yet. Every result that needs the cloud is marked `[TODO ...]`. Model metrics come from the local training run (`docs/evidence/model_metrics.md`).
+Status of this draft (2026-11-23). Azure: Key Vault, the Azure SQL free-offer database with the reference data, and the two tag policies with their live denial test are deployed (`docs/evidence/azure_foundation.md`). Fabric: the workspace `ws_gridpulse` runs on a trial capacity that belongs to a classmate outside the team; the backfill and two daily runs of the batch pipeline succeeded, with identical row counts for the same date (`docs/evidence/fabric_batch.md`, `docs/evidence/idempotency.md`). Not verified yet: the real-time path (no event sent, no KQL run on stream data), Power BI (not built), the failure mail, and the first scheduled run (2026-11-24 13:15 UTC). Every number below says where it was measured: "local" means the laptop run with data to 2026-11-06, "cloud" means Fabric with data to 2026-11-22. The two are never mixed in one figure. Open items are marked `[TODO ...]`, `[TO CONFIRM ...]` or `[TO DECIDE ...]`.
 
 ---
 
@@ -41,20 +41,42 @@ Results so far:
 | Item | Result | Where measured |
 |---|---|---|
 | Bronze, silver and gold built from 68,784 demand hours and 343,920 city-hours of weather | done | local run, 2026-11-22 |
+| Bronze, silver and gold built from 69,192 demand hours and 345,960 city-hours of weather | done (`pl_backfill`, 63.5 min) | cloud, 2026-11-23 |
 | Data-quality checks | 17 checks: 14 PASS, 3 WARN (all known conditions), 0 FAIL | local run |
-| Notebook run times | nb_bronze 9 s, nb_silver 26 s, nb_gold 15 s on a laptop (2 cores) | local run; `[TODO after T4.2: Fabric timings]` |
-| Pipeline runs twice without duplicates (success criterion 1) | `[TODO after T3.4]` | Fabric |
+| Data-quality checks | 21 checks (17 + 4 on the Previous Runs weather): 18 PASS, 3 WARN (known conditions), 0 FAIL | cloud, 2026-11-23 |
+| Notebook run times | nb_bronze 9 s, nb_silver 26 s, nb_gold 15 s on a laptop (2 cores) | local run |
+| Notebook run times | daily run: nb_bronze 286 s, nb_silver 489 s, nb_gold 338 s, nb_predict 263 s; backfill nb_forecast 1,121 s (Spark session start included) | cloud, 2026-11-23 (`docs/evidence/fabric_batch.md`) |
+| Pipeline runs twice without duplicates (success criterion 1) | met for two runs of the same `run_date`: all 30 table counts identical; the multi-day test (first scheduled run, 2026-11-24) is pending | cloud, 2026-11-23 (`docs/evidence/idempotency.md`) |
 | Live events visible within 10 s, anomaly flagged (criterion 3) | `[TODO after T6.4]` | Fabric |
-| Forecast beats seasonal-naive MAPE by at least 30 % (criterion 6) | met on history, scored with weather of the production lead time: holdout 2026 MAPE 2.90 % vs 6.84 % (skill 57.6 %), monthly backtest 2.56 % vs 6.95 % (skill 63.1 %) | local run; live rows in Fabric still to come |
-| Key Vault and Azure Policy demonstrated (criterion 5) | Azure part done: secrets generated into `kv-hz2611-cdda` and read back by `load_sql.py`; an untagged resource refused with `RequestDisallowedByPolicy`. Fabric part (`nb_silver` reading the salt) `[TODO after T8.4]` | Azure, 2026-11-23, `docs/evidence/azure_foundation.md` |
+| Forecast beats seasonal-naive MAPE by at least 30 % (criterion 6) | met on history, scored with the closest archived lead to the production lead: holdout 2026 MAPE 2.90 % vs 6.84 % (skill 57.6 %), monthly backtest 2.56 % vs 6.95 % (skill 63.1 %) | local run, data to 2026-11-06 |
+| Same criterion, cloud | holdout 2026 MAPE 2.815 % vs 6.724 % over 7,819 h (skill 58.1 %), monthly backtest 2.546 % vs 6.895 % over 16,577 h (skill 63.1 %); 24 live rows written for 2026-11-24, not yet scored | cloud, data to 2026-11-22 (`docs/evidence/fabric_batch.md`) |
+| Key Vault and Azure Policy demonstrated (criterion 5) | Azure part done: secrets generated into `kv-hz2611-cdda` and read back by `load_sql.py`; an untagged resource refused with `RequestDisallowedByPolicy`. Fabric part: `nb_silver` read the salt from Key Vault in the pipeline runs started by Hamza; not yet in a scheduled run | Azure and cloud, 2026-11-23, `docs/evidence/azure_foundation.md`, `docs/evidence/fabric_batch.md` |
 
-Team and contributions (planned; `[TODO: final version with commit counts from git log]`):
+Team and contributions (planned). All commits in the repository so far are by one author, Hamza ZIOUINE. The parts listed for Nacir and Omar below are planned; they have not built them yet. `[TO CONFIRM: final table from facts and git log at submission]`
 
 | Member | Persona | Main parts | Demo steps |
 |---|---|---|---|
 | Hamza ZIOUINE | Data Engineer | architecture, batch pipeline, Spark medallion, ML, infrastructure scripts | 1, 2, 3, 6 |
-| Mohamed NACIR | Admin | real-time path (simulator, Eventstream, Eventhouse, KQL, dashboard, Activator), subscription and trial owner | 1, 4 |
-| Omar MOUNABBIH | Analyst | Power BI model and report, business interpretation, cost and limitations | 1, 5, 7 |
+| Mohamed NACIR | Admin | planned: real-time path (Eventstream source and destination, KQL runs, dashboard, Activator); owner of the Azure subscription | 1, 4 |
+| Omar MOUNABBIH | Analyst | planned: Power BI report, business interpretation, cost and limitations | 1, 5, 7 |
+
+Prior work. Part of the code comes from GridCast, an earlier personal project of Hamza (https://github.com/hamzaziouine/gridcast), a day-ahead Ontario demand forecast built without Azure or Fabric: the IESO and Open-Meteo parsers, the fixed UTC-5 time model, the calendar features, the LightGBM parameters, four test files and two fixtures (list in `NOTICE.md`). Everything on Azure and Fabric, the medallion layers, the real-time path, pseudonymisation and the lead-matched training are new in GridPulse.
+
+### Changes since the proposal
+
+| # | Proposal said | What we did | Why |
+|---|---|---|---|
+| a | about 50 events per second from the simulator | 10 events per second | assumed limit of the 4 CU trial capacity; not measured yet |
+| b | Fabric Git integration with GitHub | not done; item definitions are kept in `fabric/` and deployed by script | `[TO DECIDE: set it up or drop it]` |
+| c | Data Engineer: workspace Contributor, Key Vault Secrets User | workspace Admin (he created the workspace) and Key Vault Secrets Officer (he writes secrets) | the creator of a workspace becomes Admin; the deploy writes secrets |
+| d | the SQL firewall is restricted | `AllowAzureServices` (0.0.0.0) plus one laptop IP | Fabric copies run on shared infrastructure with no fixed outbound IP (section 8) |
+| e | role and Key Vault access are logged | only the Azure activity log; no diagnostic setting, so secret reads are not logged | Log Analytics ingestion costs money |
+| f | each run overwrites only its own date partition | bronze replaces the rows of the files it re-reads (`replaceWhere` on `source_file`); silver and gold are recomputed in full | simpler and still rerun-safe at this size (section 5) |
+| g | training on the weather forecasts as issued at the time, so no leakage | that was wrong: the Historical Forecast archive keeps a lead of a few hours, shorter than in production. Training and scoring now use the closest archived lead from the Previous Runs API | measured in section 9.4 |
+| h | the Spark notebook refreshes gold live during the demo | the demo script shows the snapshot of a run made before the demo | a full run takes about 25 minutes on the trial capacity (`docs/evidence/fabric_batch.md`). `[TO DECIDE: start a run in demo step 2 and open its result at the end]` |
+| i | four members | three; the fourth never joined, so security has no dedicated owner | `[TO DECIDE: who presents security]` |
+| j | Fabric on Nacir's own trial capacity | a trial capacity that belongs to a classmate outside the team | Nacir's trial was not visible from any of our accounts on 2026-11-23. `[TO CONFIRM: the capacity owner's agreement]` |
+| k | Admin persona: Key Vault Administrator, SQL Entra admin, workspace Admin | Nacir: Key Vault Secrets Officer, no SQL Entra admin yet, workspace Member | the Azure foundation ran under his session before other roles existed; Hamza created the workspace (`docs/evidence/rbac.md`) |
 
 ## 2. Functional requirements and target users
 
@@ -79,12 +101,12 @@ Team and contributions (planned; `[TODO: final version with commit counts from g
 
 | # | Requirement | Acceptance (proposal success criteria) | Status |
 |---|---|---|---|
-| FR1 | Load S1 to S3 every day into the Lakehouse | pipeline runs end to end twice with no duplicate rows | pipeline JSON written; `[TODO after T3.3, T3.4]` |
-| FR2 | Clean, join and aggregate into curated Delta tables with quality checks | gold refreshed by the Spark notebooks during the demo; checks stored per run | tested locally |
-| FR3 | Ingest live meter events and analyse them with KQL | events in the Eventhouse within 10 s; Q1 and Q2 return results; injected anomaly flagged | KQL written; `[TODO after T6.3, T6.4]` |
+| FR1 | Load S1 to S3 every day into the Lakehouse | pipeline runs end to end twice with no duplicate rows | cloud: two runs for the same date, identical counts (`docs/evidence/idempotency.md`); daily schedule from 2026-11-24, first scheduled run pending |
+| FR2 | Clean, join and aggregate into curated Delta tables with quality checks | gold refreshed by the Spark notebooks during the demo; checks stored per run | tested locally; cloud: Delta tables written in Fabric, `silver_dq_results` stored per run |
+| FR3 | Ingest live meter events and analyse them with KQL | events in the Eventhouse within 10 s; Q1 and Q2 return results; injected anomaly flagged | not verified: Eventhouse table created (0 rows), Eventstream empty, KQL written; `[TODO after T6.3, T6.4]` |
 | FR4 | Report for the business questions | at least 4 visuals, 3 KPIs, slicers; Q1 to Q4 answered | spec written; `[TODO after T7.2]` |
-| FR5 | Day-ahead forecast with tracked experiments | beats seasonal-naive MAPE by at least 30 % | met on history (skill 60.5 % holdout, 64.8 % backtest), tested locally; `[TODO after T5.1: same run in Fabric]` |
-| FR6 | Security controls | Key Vault and Azure Policy demonstrated live | Key Vault + Policy done in Azure on 2026-11-23 (`docs/evidence/azure_foundation.md`); Fabric secret read `[TODO after T8.4]` |
+| FR5 | Day-ahead forecast with tracked experiments | beats seasonal-naive MAPE by at least 30 % | met on history. Local: skill 57.6 % holdout, 63.1 % backtest. Cloud: 58.1 % holdout, 63.1 % backtest; experiment and registered model exist in Fabric |
+| FR6 | Security controls | Key Vault and Azure Policy demonstrated live | Key Vault + Policy done in Azure on 2026-11-23 (`docs/evidence/azure_foundation.md`); Fabric secret read done in pipeline runs started by Hamza on 2026-11-23 (`docs/evidence/fabric_batch.md`); scheduled run pending |
 | FR7 | Cost control and cleanup | all resources deleted or paused after the demo, listed in the inventory | scripted (`cleanup.ps1`), `docs/resource_inventory.md` |
 
 Non-functional requirements: cost under the $20 monthly budget alert; every resource in Germany West Central (allowed by the subscription policy); the whole platform rebuildable from the repository (section 11); source licences respected (`NOTICE.md`: no bulk IESO files in Git, Open-Meteo attribution under CC BY 4.0).
@@ -94,11 +116,11 @@ Non-functional requirements: cost under the $20 monthly budget alert; every reso
 | Minimum | GridPulse | Status |
 |---|---|---|
 | 2 or more heterogeneous sources | 4 (CSV over HTTP, JSON over REST, relational SQL, event stream) | sources pulled and generated locally |
-| 1 or more batch pipeline | `pl_daily_ingest` (daily), `pl_backfill` (one-off) | written, not deployed |
-| 1 or more Lakehouse with documented layers | `lh_gridpulse`, bronze / silver / gold | tested locally |
-| 1 or more Spark notebook writing Delta | `nb_bronze`, `nb_silver`, `nb_gold`, `nb_forecast`, `nb_predict` | all five tested locally (Parquet stand-in for Delta); Delta write `[TODO after T4.2]` |
-| 1 or more stream into Eventstream and Eventhouse | simulator → `es_meters` → `eh_gridpulse` | simulator dry-run tested locally |
-| 2 or more KQL queries, one with a time window | Q1 (5-minute tumbling window), Q2 (anomaly), Q3 (top 5) | written |
+| 1 or more batch pipeline | `pl_daily_ingest` (daily), `pl_backfill` (one-off) | cloud: deployed and run (backfill once, daily twice) |
+| 1 or more Lakehouse with documented layers | `lh_gridpulse`, bronze / silver / gold | cloud: `lh_gridpulse` with 7 bronze, 10 silver, 13 gold tables |
+| 1 or more Spark notebook writing Delta | `nb_bronze`, `nb_silver`, `nb_gold`, `nb_forecast`, `nb_predict` | cloud: all five ran in Fabric and wrote 30 Delta tables; locally with a Parquet stand-in |
+| 1 or more stream into Eventstream and Eventhouse | simulator → `es_meters` → `eh_gridpulse` | not verified: items exist in Fabric, no event sent yet; simulator dry-run tested locally |
+| 2 or more KQL queries, one with a time window | Q1 (5-minute tumbling window), Q2 (anomaly), Q3 (top 5) | written, not run on stream data |
 | Power BI: 4 visuals, 2 KPIs, 1 slicer | 4 pages planned, 3 KPIs, 3 slicers | spec written |
 | 3 or more security controls, 1 demonstrated | 8 or more controls, policy denial demonstrated live | `docs/security.md` |
 | Architecture diagram + README + demo evidence | `docs/architecture.png`, README, `docs/demo_script.md` | diagram and README done; `[TODO: demo evidence]` |
@@ -159,7 +181,7 @@ S4, meter events. `{ts, meter_id, site_id, kw, voltage, status}`. The load follo
 | bronze_customers | email_unique | PASS | 0 | |
 | silver_customers_pseudo | pii_absent | PASS | 0 | no PII column in silver |
 
-`[TODO after T4.1: the same table from the first Fabric run]`
+Cloud results (Fabric, `run_date` 2026-11-23, data to 2026-11-22): the same 17 checks plus the 4 Previous Runs checks, 21 rows per run, 18 PASS, 3 WARN, 0 FAIL. The three WARN are the same known conditions as above (the 2025-05-01 05:00Z gap, twice, and 6 newest demand hours waiting for weather); `freshness_days` saw newest EST date 2026-11-23. The backfill and both daily runs gave the same 21 results (`docs/evidence/fabric_batch.md`, section 6).
 
 Other quality measures in the code: CSV and JSON read in FAILFAST mode (a malformed row stops the run instead of becoming nulls); revised IESO files deduplicated per hour by file creation time; weather deduplicated per city and hour by ingestion time; one-row-per-hour silver grid; gaps kept as gaps, never filled.
 
@@ -242,7 +264,7 @@ Definition: `fabric/pl_daily_ingest.DataPipeline/pipeline-content.json`, generat
 
 Schedule: daily at 13:15 UTC (08:15 EST; IESO posts the previous day at about 07:30 EST). `pl_backfill` (11 activities) copies every IESO year, every Open-Meteo Historical Forecast month since 2019 and every Previous Runs month since 2024-01, runs bronze with `full_refresh = true`, then silver, gold and `nb_forecast` (with `train_weather = matched`).
 
-Status: written and validated offline (`deploy_fabric.ps1 -DryRun`, `tests/unit/test_render.py`); not run in Fabric. `[TODO after T3.3: screenshot of a green run in the Monitor hub, with activity durations]` `[TODO after T3.4: docs/evidence/idempotency.md, counts after two runs of the same run_date]`
+Status (cloud, 2026-11-23): both pipelines deployed by `deploy_fabric.ps1`. `pl_backfill` ran once in 63.5 min (copies 28.5 min, set by the 95 sequential Open-Meteo months); `pl_daily_ingest` ran twice by hand for `run_date` 2026-11-23, about 24 and 25 min, with identical row counts in all 30 tables (`docs/evidence/idempotency.md`). Activity durations are in `docs/evidence/fabric_batch.md`. The deployed pipelines have no `mail_failure` activity yet, because `con_outlook_alerts` (browser step) does not exist. The schedule starts on 2026-11-24. `[TODO after T3.3: screenshot of a green run in the Monitor hub]`
 
 ### 5.2 Code organisation
 
@@ -284,7 +306,7 @@ Dimensions: `gold_dim_date` (built in pandas with the `holidays` package), `gold
 
 ### 5.6 Results
 
-Row counts of the local run (2026-11-22, Previous Runs tables from the rerun of 2026-11-23). `bronze_openmeteo_forecast` and `silver_weather_forecast_ontario` were not produced locally (no Forecast API file in a local run); `gold_forecast` and `gold_forecast_eval` come from `nb_forecast` (section 9).
+Row counts of the local run (2026-11-22, Previous Runs tables from the rerun of 2026-11-23, data to 2026-11-06). The cloud counts (data to 2026-11-22) are in `docs/evidence/idempotency.md`, for example `bronze_ieso_demand` 69,192, `bronze_openmeteo_hourly` 345,960, `gold_demand_daily` 2,884 and `gold_top_peaks` 693. `bronze_openmeteo_forecast` and `silver_weather_forecast_ontario` were not produced locally (no Forecast API file in a local run); `gold_forecast` and `gold_forecast_eval` come from `nb_forecast` (section 9).
 
 | Layer | Table | Rows |
 |---|---|---|
@@ -308,9 +330,9 @@ Row counts of the local run (2026-11-22, Previous Runs tables from the rerun of 
 | gold | `gold_city_weather_daily` | 14,330 |
 | gold | `gold_dim_date`, `gold_dim_city`, `gold_dim_site`, `gold_dim_meter` | 2,874, 5, 10, 50 |
 
-Local run times on a laptop (local Spark 3.5, 2 cores): `nb_bronze` 9 s, `nb_silver` 26 s, `nb_gold` 15 s on 2026-11-22; with the Previous Runs tables (2026-11-23) 11 s, 29 s and 11 s. Not measured in Fabric yet.
+Local run times on a laptop (local Spark 3.5, 2 cores): `nb_bronze` 9 s, `nb_silver` 26 s, `nb_gold` 15 s on 2026-11-22; with the Previous Runs tables (2026-11-23) 11 s, 29 s and 11 s. Cloud activity durations on the trial capacity, Spark session start included: backfill `nb_bronze` 258 s, `nb_silver` 368 s, `nb_gold` 338 s, `nb_forecast` 1,121 s; daily run 2 `nb_bronze` 286 s, `nb_silver` 489 s, `nb_gold` 338 s, `nb_predict` 263 s (`docs/evidence/fabric_batch.md`).
 
-`[TODO after T4.2: Fabric run times per notebook, screenshot of the Lakehouse table list, nb_gold snapshot with the row counts]`
+`[TODO after T4.2: screenshot of the Lakehouse table list, nb_gold snapshot with the row counts]`
 
 ## 6. Real-time architecture and KQL analysis
 
@@ -345,7 +367,7 @@ Q3, bonus: top 5 sites by average load over the last 15 minutes (`q3_top5.kql`).
 
 ### 6.4 Results
 
-`[TODO after T6.3: count of meter_readings over 1 minute at 10 events/s, expected about 600]` `[TODO after T6.4: ingestion delay ingestion_time() - ts at 10, 25 and 50 events/s on FTL4, in docs/evidence/realtime_latency.md]` `[TODO after T6.5: dashboard screenshot]` `[TODO after T6.6: Q2 result with the injected anomaly and the alert mail, with the delay from injection to mail]`
+Status (2026-11-23): not verified. The Eventhouse `eh_gridpulse` and the table `meter_readings` with its mapping exist, with 0 rows; the Eventstream `es_meters` has no source or destination yet; no event has been sent and no KQL query has run on stream data. `[TODO after T6.3: count of meter_readings over 1 minute at 10 events/s, expected about 600]` `[TODO after T6.4: ingestion delay ingestion_time() - ts at 10, 25 and 50 events/s on FTL4, in docs/evidence/realtime_latency.md]` `[TODO after T6.5: dashboard screenshot]` `[TODO after T6.6: Q2 result with the injected anomaly and the alert mail, with the delay from injection to mail]`
 
 ## 7. Power BI model, KPIs and insights
 
@@ -370,7 +392,7 @@ Figures from the local gold tables, to check against the Fabric report before Om
 
 Full text: `docs/security.md` (to be merged into this section when the PDF is built). Summary:
 
-- Identities: three personas on personal Entra ID accounts with least privilege at four levels. Admin = Nacir (subscription Owner, Key Vault Administrator, SQL Entra admin, workspace Admin). Data Engineer = Hamza (RG Contributor + Resource Policy Contributor, Key Vault Secrets Officer, SQL `db_datareader` + `db_datawriter`, workspace Member). Analyst = Omar (RG Reader, no Key Vault, workspace Viewer, gold only through the semantic model).
+- Identities, as deployed on 2026-11-23 (`docs/evidence/rbac.md`): Admin = Nacir (subscription Owner, Key Vault Secrets Officer, workspace Member; no SQL Entra admin yet). Data Engineer = Hamza (RG Contributor + Resource Policy Contributor, Key Vault Secrets Officer, workspace Admin because he created it). Analyst = Omar (RG Reader, no Key Vault role, workspace Viewer). The Azure foundation was deployed from Hamza's laptop under Nacir's signed-in session before the other roles existed (`docs/security.md`, section 8.1). `[TO CONFIRM: Nacir's written agreement]`
 - Secrets: `sql-gpadmin-password`, `customer-hash-salt` and `es-meters-conn` in `kv-hz2611-cdda` (RBAC mode); read at run time by `load_sql.py`, `deploy_fabric.ps1`, `nb_silver` and the simulator. Nothing secret in Git, enforced by a repository test.
 - Classification: five PII columns classified in Azure SQL; PII only in SQL and `bronze_customers`; salted SHA-256 pseudonym from silver on; a DQ check fails the run if a PII column reaches silver. Purview scanning of Azure SQL and OneLake is designed, not built (no Purview account, no Fabric admin rights).
 - Policy: inherited allowed regions plus our two deny assignments that require the tags `project` and `owner`, with a live denial test (`policy_assignments.ps1 -Test`).
@@ -398,14 +420,21 @@ Full text: `docs/security.md` (to be merged into this section when the PDF is bu
 - Production model: refit on every complete day and registered.
 - Metrics: MAE, RMSE, MAPE, MAPE at the daily peak hour, and skill against the naive baseline = 1 - MAPE(model) / MAPE(naive). It is a regression task, so class imbalance does not apply.
 
-Results of the local run (real IESO and Open-Meteo data, `nb_forecast` executed on a laptop; full table by month in `docs/evidence/model_metrics.md`, regenerated by `scripts/model_report.py`):
+Results of the local run (real IESO and Open-Meteo data to 2026-11-06, `nb_forecast` executed on a laptop; full table by month in `docs/evidence/model_metrics.md`, regenerated by `scripts/model_report.py`):
 
 | Evaluation | Period | Hours | LightGBM MAPE | Naive MAPE | LightGBM MAE | Skill |
 |---|---|---|---|---|---|---|
 | Holdout, model frozen after 2025 | 2026-01-01 to 2026-11-06 | 7,417 | 2.90 % | 6.84 % | 493 MW | 57.6 % |
 | Backtest, retrained monthly | 2025-01-01 to 2026-11-06 | 16,175 | 2.56 % | 6.95 % | 435 MW | 63.1 % |
 
-These are the numbers of `nb_forecast` with its default `train_weather = matched` (section 9.4). Early stopping on 2025 chose 2,975 boosting rounds, close to the 3,000 cap, so the validation error was still falling slowly. Success criterion 6 (skill of at least 30 %) is met in both views, on historical data. July is the hardest month (3.54 % in 2025, 3.85 % in 2026): air-conditioning load follows temperature closely, so weather forecast error weighs most then. With the older setting (`train_weather = historical`, short-lead weather for training and scoring) the same notebook gave 2.70 % on the holdout and 2.45 % on the backtest; those figures were optimistic, because the weather they used was more accurate than the weather the daily forecast gets.
+Results of the cloud run (`nb_forecast` in `pl_backfill` on Fabric, data to 2026-11-22, computed from the `holdout` and `backtest` rows of `gold_forecast`; `docs/evidence/fabric_batch.md`, section 7). The periods differ from the local run, so the two tables are not compared hour for hour:
+
+| Evaluation | Period (target hours, UTC) | Hours | LightGBM MAPE | Naive MAPE | Skill |
+|---|---|---|---|---|---|
+| Holdout, model frozen after 2025 | 2026-01-01 05:00 to 2026-11-22 23:00 | 7,819 | 2.815 % | 6.724 % | 58.1 % |
+| Backtest, retrained monthly | 2025-01-01 05:00 to 2026-11-22 23:00 | 16,577 | 2.546 % | 6.895 % | 63.1 % |
+
+These are the numbers of `nb_forecast` with its default `train_weather = matched` (section 9.4). Early stopping on 2025 chose 2,975 boosting rounds, close to the 3,000 cap, so the validation error was still falling slowly. That round count is reused in the backtest folds of 2025, so the 2025 backtest months are slightly optimistic; the 2026 months are the clean part of the backtest (monthly table in `docs/evidence/model_metrics.md`). Success criterion 6 (skill of at least 30 %) is met in both views, on historical data. July is the hardest month (3.54 % in 2025, 3.85 % in 2026): air-conditioning load follows temperature closely, so weather forecast error weighs most then. With the older setting (`train_weather = historical`, short-lead weather for training and scoring) the same notebook gave 2.70 % on the holdout and 2.45 % on the backtest; those figures were optimistic, because the weather they used was more accurate than the weather the daily forecast gets.
 
 ### 9.3 Tracking, registry and outputs
 
@@ -415,11 +444,11 @@ These are the numbers of `nb_forecast` with its default `train_weather = matched
 - holdout and backtest metrics, plus the backtest MAPE per month as a stepped metric;
 - the feature importance plot and table, and the monthly backtest table as artifacts.
 
-It then registers the model as `gridpulse_lgbm`. Predictions go to `gold_forecast` (one row per hour and split: `backtest`, `holdout`, `live`) and monthly errors to `gold_forecast_eval`. `nb_predict`, the last activity of the daily pipeline, loads the newest registered version, writes tomorrow's 24 `live` rows and fills `actual_mw` of earlier live rows once IESO has published them, so the report tracks live accuracy day by day. Locally, MLflow uses a file store (`mlruns/`, git-ignored). `[TODO after T5.1: screenshot of the MLflow run and the registered model in Fabric]`
+It then registers the model as `gridpulse_lgbm`. Predictions go to `gold_forecast` (one row per hour and split: `backtest`, `holdout`, `live`) and monthly errors to `gold_forecast_eval`. `nb_predict`, the last activity of the daily pipeline, loads the newest registered version, writes tomorrow's 24 `live` rows and fills `actual_mw` of earlier live rows once IESO has published them, so the report tracks live accuracy day by day. `gold_forecast_eval` is written only by `nb_forecast`; the daily run does not refresh it, so its monthly errors stay those of the last training run. Locally, MLflow uses a file store (`mlruns/`, git-ignored). In Fabric the backfill created the experiment `exp_gridpulse_forecast` and the model `gridpulse_lgbm`; `nb_predict` used version 1 for the 24 live rows of 2026-11-24. Fabric also created an experiment named `nb_forecast` automatically (the notebook's default experiment); our code does not use it. `[TODO after T5.1: screenshot of the MLflow run and the registered model in Fabric]`
 
 ### 9.4 Limitations and monitoring needs
 
-- Weather lead time. In production the forecast for day T is fetched on T-1 at 13:15 UTC, 23 to 46 hours before the target hours. The Historical Forecast series keeps the newest model run for each hour (a lead of a few hours), so a model trained and scored on it looks better than it will be live. We measured the gap with the Open-Meteo Previous Runs API, which archives what the same model (GFS) forecast one day and two days before each hour (`scripts/backtest_weather_lead.py`, full tables in `docs/evidence/model_metrics.md`). That archive is complete for our 9 variables only from December 2024, so the check covers target days from 2024-12-08 to 2026-11-05. With the weather of day T replaced by the closest match to the production lead (day 1 for HE1 to HE17, day 2 for HE18 to HE24):
+- Weather lead time. In production the forecast for day T is fetched on T-1 at 13:15 UTC, 23 to 46 hours before the target hours. The Historical Forecast series keeps the newest model run for each hour (a lead of a few hours), so a model trained and scored on it looks better than it will be live. We measured the gap with the Open-Meteo Previous Runs API, which archives what the same model (GFS) forecast one day and two days before each hour (`scripts/backtest_weather_lead.py`, full tables in `docs/evidence/model_metrics.md`). That archive is complete for our 9 variables only from December 2024, so the check covers target days from 2024-12-08 to 2026-11-05. With the weather of day T replaced by the closest archived lead to the production lead (day 1 for HE1 to HE17, day 2 for HE18 to HE24). This is an approximation: day 1 means about 24 to 30 h of lead and stands for hours whose production lead is 23 to 39 h, so HE8 to HE17 are slightly optimistic and HE18 to HE24 slightly pessimistic. Scoring the retrained model with day 1 on every hour gives 2.85 %, with day 2 on every hour 3.04 %, which brackets the figure below:
 
   | Evaluation | Naive MAPE | MAPE, short-lead weather | MAPE, production lead | Skill, production lead |
   |---|---|---|---|---|
@@ -427,7 +456,7 @@ It then registers the model as `gridpulse_lgbm`. Predictions go to `gold_forecas
   | Backtest 2025-01 to 2026-11, trained on short-lead weather, retrained monthly | 6.96 % | 2.45 % | 2.74 % | 60.7 % |
   | Holdout 2026, model trained on lead-matched weather (from 2024-01-20) | 6.84 % | 2.83 % | 2.88 % | 58.0 % |
 
-  So the weather lead costs about 0.3 to 0.4 MAPE points for a model trained on short-lead weather, and with the longer day-2 lead on every hour that model reaches 3.19 % on the holdout. Summer suffers most (backtest, July 2026: 3.50 % with short-lead weather, 4.10 % with the production lead). Training on lead-matched weather recovers most of the gap, so this is now the production setting: the pipelines copy the Previous Runs data (`cp_openmeteo_prevruns`, `fe_prevruns_months`), `nb_silver` builds `silver_weather_prevruns_ontario`, and `nb_forecast` trains and evaluates on lead-matched weather by default (`train_weather = matched`; the table in 9.2). Fallback, column by column: hours without a complete Previous Runs value keep the Historical Forecast value, which means every variable before 2024-01-19 and snowfall until 2024-12-06, and the last few hours of the newest day (the daily copy stops at the data day). Without the table at all, or with `train_weather = historical`, the notebook trains on Historical Forecast weather as before and says so in its output and in `gold_forecast.weather_source`.
+  So the weather lead costs about 0.3 to 0.4 MAPE points for a model trained on short-lead weather, and with the longer day-2 lead on every hour that model reaches 3.19 % on the holdout. Summer suffers most (backtest, July 2026: 3.50 % with short-lead weather, 4.10 % with the production lead). Training on lead-matched weather recovers most of the gap, so this is now the production setting. That choice was made by comparing both settings on the 2026 holdout, so the holdout figure of the chosen setting is a selected number; the `live` rows are the only unbiased measure. The production setting: the pipelines copy the Previous Runs data (`cp_openmeteo_prevruns`, `fe_prevruns_months`), `nb_silver` builds `silver_weather_prevruns_ontario`, and `nb_forecast` trains and evaluates on lead-matched weather by default (`train_weather = matched`; the table in 9.2). Fallback, column by column: hours without a complete Previous Runs value keep the Historical Forecast value, which means every variable before 2024-01-19 and snowfall until 2024-12-06, and the last few hours of the newest day (the daily copy stops at the data day). Without the table at all, or with `train_weather = historical`, the notebook trains on Historical Forecast weather as before and says so in its output and in `gold_forecast.weather_source`.
 
   Reproduction check (local run of 2026-11-23): the notebook's holdout is 2.90 % on 7,417 hours. On the same 7,411 hours as the backtest script it is 2.90 %, against 2.88 % for the script's retrained model. The features of the two paths are equal to within 3.4e-13 (Spark and numpy sum the city weights in a different order), but that is enough to move early stopping from 2,998 to 2,975 rounds near the flat end of the validation curve, hence the 0.02-point difference. All of this is still a backtest: the `live` rows in `gold_forecast` will give the real figure once the pipeline runs in Fabric.
 - No probabilistic output (a single median forecast).
@@ -442,7 +471,7 @@ It then registers the model as `gridpulse_lgbm`. Predictions go to `gold_forecas
 - Infrastructure as scripts: `infra/azure/*.ps1`, and `infra/fabric/deploy_fabric.ps1` with an offline `-DryRun`.
 - Item definitions in Fabric's Git format under `fabric/`.
 - Repository tests: dash check, no bulk data, no secrets.
-- CI: `.github/workflows/ci.yml` runs ruff, the dash check, the full test suite (with Spark), the offline Fabric render and the SQL loader dry run. Written, not run yet (the GitHub repository does not exist yet).
+- CI: `.github/workflows/ci.yml` runs ruff, the dash check, the full test suite (with Spark), the offline Fabric render and the SQL loader dry run on every push to the public repository on GitHub.
 
 ## 10. Cost, limitations, scalability and future work
 
@@ -455,12 +484,12 @@ It then registers the model as `gridpulse_lgbm`. Predictions go to `gold_forecas
 | Key Vault (a few hundred operations) | under $0.10 |
 | Expected total | under $2; budget alert at $20 a month |
 
-Cost drivers if this ran on paid capacity: the Fabric capacity size and its hours switched on (Spark runs, the always-on Eventhouse, Eventstream while running), then SQL compute beyond the free allowance. Sizing choices made for cost: the smallest trial capacity (4 CU) with a modest event rate, a serverless free SQL database that pauses instead of billing, 7-day retention on live data, one short pipeline run per day, and the simulator running only during tests and the demo. PLAN risk 1 estimates a pay-as-you-go F2 at about $0.36 per hour, which would be about $263 for a month switched on all the time; pausing outside working hours cuts that in proportion. `[TODO: check the F2 price on the Azure pricing page for Germany West Central before quoting it]` Actual spend: `[TODO after T12.1: budget spend from inventory.ps1]`
+Cost drivers if this ran on paid capacity: the Fabric capacity size and its hours switched on (Spark runs, the always-on Eventhouse, Eventstream while running), then SQL compute beyond the free allowance. Sizing choices made for cost: the smallest trial capacity (4 CU) with a modest event rate, a serverless free SQL database that pauses instead of billing, 7-day retention on live data, one short pipeline run per day, and the simulator running only during tests and the demo. PLAN risk 1 estimates a pay-as-you-go F2 at about $0.36 per hour, which would be about $263 for a month switched on all the time; pausing outside working hours cuts that in proportion. `[TODO: check the F2 price on the Azure pricing page for Germany West Central before quoting it]` Actual spend: 0.00 USD on the budget on 2026-11-23, after the Azure deployment. `[TODO after T12.1: final budget spend from inventory.ps1]`
 
 ### 10.2 Limitations
 
 - Trial capacity of 4 CU: event rate limited to about 10 per second in the demo, and no Spark job during the live step.
-- The trial expires 60 days after activation: the demo must happen before then, or the workspace is rebuilt from the repository on another trial.
+- The trial expires 60 days after activation. The capacity we use was created on 2026-10-19, so it should end around 2026-12-18 (estimate); the daily schedule stops on 2026-12-17. The demo must happen before then, or the workspace moves to another capacity and `pl_backfill` runs again. The capacity belongs to a classmate outside the team, so we do not control it.
 - The simulator runs on a laptop, so the live demo depends on that laptop and its network (AMQP port 5671).
 - One Lakehouse: workspace roles cannot separate bronze PII from gold (section 8).
 - Silver and gold are fully recomputed each run: fine at 68,784 hours, not at meter-level history.
@@ -479,7 +508,6 @@ See the last column of the table in section 4.3. In short: the batch sources bar
 - A Purview scan with sensitivity labels.
 - Key Vault and SQL diagnostic logs with alerts.
 - Probabilistic forecasts (quantiles), drift monitoring and scheduled retraining.
-- The CI workflow (section 9.5) running on GitHub on every push, once the repository is published.
 
 ## 11. Reproducibility and cleanup instructions
 
@@ -524,7 +552,7 @@ uv run python scripts/check_text.py
 2. `powershell -File infra\azure\deploy.ps1`: Key Vault with `sql-gpadmin-password` and `customer-hash-salt`, SQL server (TLS 1.2), firewall, free database. Run it before the policies: it creates the SQL server without tags and tags it afterwards.
 3. `powershell -File infra\azure\policy_assignments.ps1 -Test`: tag policies and the denial test.
 4. `uv sync --extra sql`, then `uv run python scripts/load_sql.py --schema --server sql-hz2611-cdda.database.windows.net --database sqldb-hz2611-gridpulse --user gpadmin --kv-url https://kv-hz2611-cdda.vault.azure.net --kv-secret sql-gpadmin-password`.
-5. Nacir starts the Fabric trial (Germany West Central).
+5. A Fabric capacity in Germany West Central. Planned: Nacir's own trial. Used on 2026-11-23: a trial capacity that belongs to a classmate outside the team.
 6. `powershell -File infra\fabric\deploy_fabric.ps1 -DryRun`, then `-CapacityName "<trial>" -AssignRoles`: workspace, roles, Lakehouse, environment, notebooks, connections, pipelines, Eventhouse and KQL tables, Eventstream, schedule.
 7. Browser-only steps (`infra/fabric/README.md`):
    - (the trial start of step 5);
@@ -536,7 +564,7 @@ uv run python scripts/check_text.py
 8. `fab job start ws_gridpulse.Workspace/pl_backfill.DataPipeline --wait`, then the daily schedule takes over.
 9. Simulator: `uv run python realtime/simulator.py --kv-url https://kv-hz2611-cdda.vault.azure.net --kv-secret es-meters-conn --rate 10`.
 
-`[TODO after the first real deployment: fixes found on the first run, measured end-to-end rebuild time]`
+Fixes found on the first real deployment (2026-11-23), all committed: the environment defaulted to Runtime 2.0, whose Python does not match the wheel, so `env_gridpulse` now pins Runtime 1.3 and a small Spark pool; `fab api` exits 0 on HTTP errors, so a failed SQL connection create looked like a success, and the script now checks the status code; `-AssignRoles` would have demoted the signed-in workspace creator to Member, and now skips it. The deploy took three runs; the backfill then took 63.5 min. `[TODO: measured end-to-end rebuild time from an empty workspace]`
 
 ### 11.4 Resource inventory and cleanup
 
