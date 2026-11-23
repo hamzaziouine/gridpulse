@@ -113,7 +113,12 @@ $ids = [ordered]@{ ALERT_TO = $AlertTo }
 # 1. Workspace -------------------------------------------------------------------------------
 Step "Workspace $ws"
 if ($DryRun) { Write-Host 'DRY RUN: nothing below talks to Fabric, Azure or any network.' -ForegroundColor Cyan }
-if (-not $DryRun) { Invoke-Fab auth status | Write-Host }
+$Me = $null
+if (-not $DryRun) {
+    $status = Invoke-Fab auth status
+    $status | Write-Host
+    if ($status -match 'Principal ID:\s*([0-9a-fA-F-]{36})') { $Me = $Matches[1] }
+}
 if (Test-FabExists $ws) {
     Write-Host 'exists'
 } else {
@@ -124,6 +129,9 @@ if (Test-FabExists $ws) {
 $ids.WORKSPACE_ID = Get-FabId $ws
 if ($AssignRoles) {
     foreach ($oid in $Personas.Keys) {
+        # The signed-in user created the workspace and is its Admin: setting the persona role on
+        # them would demote the only Admin, so their own row is skipped.
+        if ($Me -and $oid -eq $Me) { Write-Host "role $($Personas[$oid]) for $oid skipped: signed-in Admin"; continue }
         Invoke-Fab acl set $ws -I $oid -R $Personas[$oid] -f | Out-Null
         Write-Host "role $($Personas[$oid]) -> $oid"
     }
