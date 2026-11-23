@@ -123,6 +123,56 @@ def drop_alert_mail(body: dict) -> dict:
     return body
 
 
+RUNTIME_VERSION = "1.3"  # Spark 3.5, Python 3.11: what the code and the wheel are built for
+SPARK_CORES = {4, 8, 16, 32, 64}
+SPARK_MEMORY = {"28g", "56g", "112g", "224g", "400g"}
+
+
+def parse_sparkcompute(text: str) -> dict[str, str]:
+    """Flat `key: value` view of Setting/Sparkcompute.yml (nested keys as `parent.child`)."""
+    out: dict[str, str] = {}
+    parent = ""
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+        key, _, value = line.strip().partition(":")
+        if raw.startswith((" ", "	")):
+            out[f"{parent}.{key}"] = value.strip()
+        elif value.strip():
+            out[key] = value.strip()
+        else:
+            parent = key
+    return out
+
+
+def validate_environment(item: Path) -> list[str]:
+    """Spark compute of an Environment item: pinned runtime, allowed sizes, small pool."""
+    f = item / "Setting" / "Sparkcompute.yml"
+    if not f.exists():
+        return [
+            f"{item.name}: Setting/Sparkcompute.yml missing (Fabric would pick its default runtime)"
+        ]
+    s = parse_sparkcompute(f.read_text(encoding="utf-8"))
+    errors = []
+    if s.get("runtime_version", "").strip("'\"") != RUNTIME_VERSION:
+        errors.append(f"runtime_version must be {RUNTIME_VERSION}, got {s.get('runtime_version')}")
+    for k in ("driver_cores", "executor_cores"):
+        if not s.get(k, "").isdigit() or int(s[k]) not in SPARK_CORES:
+            errors.append(f"{k} must be one of {sorted(SPARK_CORES)}")
+    for k in ("driver_memory", "executor_memory"):
+        if s.get(k) not in SPARK_MEMORY:
+            errors.append(f"{k} must be one of {sorted(SPARK_MEMORY)}")
+    for k in ("enable_native_execution_engine", "dynamic_executor_allocation.enabled"):
+        if s.get(k) not in ("true", "false"):
+            errors.append(f"{k} must be true or false")
+    lo = s.get("dynamic_executor_allocation.min_executors", "")
+    hi = s.get("dynamic_executor_allocation.max_executors", "")
+    if not (lo.isdigit() and hi.isdigit() and 1 <= int(lo) <= int(hi)):
+        errors.append("dynamic_executor_allocation needs 1 <= min_executors <= max_executors")
+    return [f"{item.name}: {e}" for e in errors]
+
+
 def render_all(values: dict[str, Any], out: Path = OUT, wheel: Path | None = None,
                src: Path = SRC) -> list[Path]:  # fmt: skip
     missing = [t for t in (*ID_TOKENS, *TEXT_TOKENS) if t not in values and t not in OPTIONAL]
@@ -154,6 +204,9 @@ def render_all(values: dict[str, Any], out: Path = OUT, wheel: Path | None = Non
             else:
                 shutil.copy2(f, target)
         if item.name.endswith(".Environment"):
+            errors = validate_environment(dest)
+            if errors:
+                raise ValueError("; ".join(errors))
             if wheel is None:
                 raise ValueError("the environment needs the gridpulse wheel (--wheel)")
             libs = dest / "Libraries" / "CustomLibraries"

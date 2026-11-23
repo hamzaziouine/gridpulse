@@ -1,5 +1,5 @@
-# Public libraries installed on top of Fabric Runtime 1.3. pandas, numpy, pyarrow, lightgbm,
-# mlflow and matplotlib already ship with the runtime; the gridpulse wheel is added under
+# Public libraries installed on top of Fabric Runtime 1.3 (pinned in Setting/Sparkcompute.yml).
+# pandas, numpy, pyarrow, lightgbm, mlflow and matplotlib already ship with the runtime; the gridpulse wheel is added under
 # Libraries/CustomLibraries by infra/fabric/render.py at deploy time.
 dependencies:
   - pip:

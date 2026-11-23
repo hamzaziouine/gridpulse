@@ -140,3 +140,34 @@ def test_kql_file_splits_into_three_idempotent_commands() -> None:
     cmds = run_kql.split_commands((ROOT / "realtime/kql/00_tables.kql").read_text("utf-8"))
     assert [c.split()[0] for c in cmds] == [".create-merge", ".create-or-alter", ".alter-merge"]
     assert "meter_readings_json" in cmds[1] and "7d" in cmds[2]
+
+
+def test_environment_pins_runtime_13_and_a_small_pool(tmp_path: Path, wheel: Path) -> None:
+    # Without Setting/Sparkcompute.yml Fabric chose runtime 2.0 on 2026-11-23 and the
+    # environment publish failed (sparkLibraries Failed): the wheel targets Python 3.11.
+    render.render_all(values(), tmp_path / "out", wheel)
+    env = tmp_path / "out" / "env_gridpulse.Environment"
+    s = render.parse_sparkcompute((env / "Setting" / "Sparkcompute.yml").read_text("utf-8"))
+    assert s["runtime_version"] == "1.3"
+    assert (s["driver_cores"], s["driver_memory"]) == ("4", "28g")
+    assert (s["executor_cores"], s["executor_memory"]) == ("4", "28g")
+    assert s["dynamic_executor_allocation.enabled"] == "true"
+    assert s["dynamic_executor_allocation.min_executors"] == "1"
+    assert s["dynamic_executor_allocation.max_executors"] == "2"
+    assert "instance_pool_id" not in s  # starter pool
+    assert (env / "Libraries" / "CustomLibraries" / wheel.name).exists()
+    assert render.validate_environment(env) == []
+
+
+def test_environment_validation_rejects_a_wrong_runtime_or_missing_file(tmp_path: Path) -> None:
+    item = tmp_path / "env_x.Environment"
+    assert "missing" in render.validate_environment(item)[0]
+    (item / "Setting").mkdir(parents=True)
+    src = ROOT / "fabric" / "env_gridpulse.Environment" / "Setting" / "Sparkcompute.yml"
+    text = src.read_text("utf-8").replace("runtime_version: 1.3", "runtime_version: 2.0")
+    text = text.replace("max_executors: 2", "max_executors: 0").replace("28g", "30g")
+    (item / "Setting" / "Sparkcompute.yml").write_text(text, "utf-8")
+    errors = " ".join(render.validate_environment(item))
+    assert "runtime_version must be 1.3" in errors
+    assert "min_executors <= max_executors" in errors
+    assert "driver_memory" in errors and "executor_memory" in errors
