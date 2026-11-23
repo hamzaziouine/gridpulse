@@ -215,7 +215,7 @@ def test_notebooks_end_to_end_on_fixture(spark, tmp_path: Path, monkeypatch) -> 
 
     root = Path(__file__).parents[2]
     files = tmp_path / "Files"
-    for sub in ("ieso", "openmeteo"):
+    for sub in ("ieso", "openmeteo", "openmeteo_prevruns"):
         shutil.copytree(LAKE / sub, files / "bronze" / sub)
     store = LocalStore(spark, tmp_path / "Tables", files)
     for t in reference.LOAD_ORDER:
@@ -234,12 +234,91 @@ def test_notebooks_end_to_end_on_fixture(spark, tmp_path: Path, monkeypatch) -> 
     assert statuses["hourly_gaps"] == "WARN" and "FAIL" not in statuses.values()
     tables = ["bronze_ieso_demand", "bronze_openmeteo_hourly", "silver_demand_hourly",
               "silver_demand_weather_hourly", "gold_demand_hourly", "gold_demand_daily",
-              "gold_dim_date", "gold_dim_meter", "silver_dq_results"]  # fmt: skip
+              "gold_dim_date", "gold_dim_meter", "silver_dq_results",
+              "bronze_openmeteo_prevruns", "silver_weather_prevruns_ontario"]  # fmt: skip
     counts = {t: store.read(t).count() for t in tables}
     assert counts["silver_demand_hourly"] == 143 and counts["gold_demand_daily"] == 6
+    assert counts["bronze_openmeteo_prevruns"] == 149 * 5 * 2
+    assert counts["silver_weather_prevruns_ontario"] == 149 * 2
+    assert statuses["coverage"] == "PASS"
 
     # Daily rerun of the same run_date: same counts, no duplicates anywhere.
     run("bronze", full_refresh=False)
     run("silver")
     run("gold")
     assert {t: store.read(t).count() for t in tables} == counts
+
+
+def _prevruns(spark, files: list[str]):
+    from gridpulse.medallion import bronze, silver
+    from gridpulse.medallion.common import cities_frame
+
+    cities = cities_frame(spark)
+    b = bronze.read_openmeteo_prevruns(spark, files, cities, INGESTED, RUN).cache()
+    city = silver.weather_prevruns_city(b).cache()
+    ont = silver.weather_prevruns_ontario(city, cities).cache()
+    return b, city, ont
+
+
+def _ontario_pandas(ont, lead: int):
+    import pandas as pd
+    from pyspark.sql import functions as F
+
+    from gridpulse.features import WEATHER_COLUMNS
+
+    rows = ont.where(F.col("lead_days") == lead).select(
+        F.unix_seconds("valid_time").alias("s"), *WEATHER_COLUMNS
+    )
+    pdf = rows.toPandas().sort_values("s").reset_index(drop=True)
+    pdf.insert(0, "valid_time", pd.to_datetime(pdf.pop("s"), unit="s", utc=True))
+    return pdf
+
+
+def test_prevruns_bronze_silver_match_the_pandas_aggregation(spark) -> None:
+    """Spark silver_weather_prevruns_ontario == gridpulse.weather_lead.load_prevruns (the code the
+    lead-matched backtest used), for both leads, every weather column."""
+    import numpy as np
+
+    from gridpulse import weather_lead as wl
+    from gridpulse.features import WEATHER_COLUMNS
+    from gridpulse.medallion import quality
+
+    files = sorted(str(p) for p in (LAKE / "openmeteo_prevruns").glob("*.json"))
+    b, city, ont = _prevruns(spark, files)
+    assert b.count() == 149 * 5 * 2 and b.where("city_key IS NULL").count() == 0
+    assert {r[0] for r in b.select("lead_days").distinct().collect()} == {1, 2}
+    for lead in (1, 2):
+        got = _ontario_pandas(ont, lead)
+        ref = wl.load_prevruns(LAKE / "openmeteo_prevruns", lead)
+        assert got["valid_time"].tolist() == ref["valid_time"].tolist()
+        np.testing.assert_allclose(
+            got[list(WEATHER_COLUMNS)].to_numpy(dtype=float),
+            ref[list(WEATHER_COLUMNS)].to_numpy(dtype=float),
+            rtol=1e-12,
+            atol=1e-9,
+        )
+    checks = {r.check_name: r.status for r in quality.check_prevruns(b, city, ont, RUN)}
+    assert set(checks.values()) == {"PASS"}, checks
+
+
+def test_prevruns_incomplete_hours_stay_null(spark, tmp_path: Path) -> None:
+    """A variable missing for one city nulls that Ontario aggregate (and HDD/CDD when it is the
+    temperature) instead of averaging over the other cities; the other columns stay."""
+    import json
+
+    import numpy as np
+
+    src = LAKE / "openmeteo_prevruns" / "2025-04.json"
+    payload = json.loads(src.read_text(encoding="utf-8"))
+    payload[0]["hourly"]["snowfall_previous_day1"][:3] = [None] * 3  # Toronto, 00..02Z
+    payload[1]["hourly"]["temperature_2m_previous_day1"][5] = None  # Ottawa, 05Z
+    bad = tmp_path / "2025-04.json"
+    bad.write_text(json.dumps(payload), encoding="utf-8")
+    _, _, ont = _prevruns(spark, [str(bad)])
+    d1 = _ontario_pandas(ont, 1)
+    assert d1["snowfall_w"].iloc[:3].isna().all() and d1["snowfall_w"].iloc[3:].notna().all()
+    assert np.isnan(d1.loc[5, ["temperature_2m_w", "temperature_2m_mean", "hdd_w", "cdd_w"]]
+                    .to_numpy(dtype=float)).all()  # fmt: skip
+    assert d1.loc[5, "wind_speed_10m_w"] == d1.loc[5, "wind_speed_10m_w"]  # not NaN
+    d2 = _ontario_pandas(ont, 2)
+    assert d2[list(d2.columns[1:])].notna().all().all()

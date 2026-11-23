@@ -24,7 +24,7 @@ now. GridPulse puts the three in one governed platform:
 | Part | State |
 |---|---|
 | Spark notebooks (bronze, silver, gold, forecast, predict) | Written, **tested locally** on the real 2019-2026 data with local Spark 3.5; not run in Fabric yet |
-| Forecast model | Tested locally: holdout 2026 MAPE 2.70 % vs 6.84 % for the seasonal naive, monthly backtest 2.45 % vs 6.95 % ([details](docs/evidence/model_metrics.md)) |
+| Forecast model | Tested locally, trained and scored with weather of the production lead time: holdout 2026 MAPE 2.90 % vs 6.84 % for the seasonal naive, monthly backtest 2.56 % vs 6.95 % ([details](docs/evidence/model_metrics.md)) |
 | Data Factory pipelines, environment, deploy script | Written, dry-run locally (no Fabric capacity yet) |
 | Azure scripts (Key Vault, SQL, policy, inventory, cleanup) | Written; only the resource group and its budget exist in Azure |
 | SQL loader | Tested locally against SQLite; not run against Azure SQL yet |
@@ -68,8 +68,9 @@ Library versions follow Fabric Runtime 1.3 (Spark 3.5, pandas 2.x, numpy 1.26).
 uv sync --all-extras                       # venv with Spark, MLflow, test tools, SQL driver
 uv run python scripts/pull_ieso.py         # 8 yearly IESO files to data/raw/ieso
 uv run python scripts/pull_openmeteo.py    # 95 monthly JSON files to data/raw/openmeteo
+uv run python scripts/pull_openmeteo_prevruns.py  # 35 monthly Previous Runs files (training weather)
 uv run python scripts/run_local.py         # nb_bronze, nb_silver, nb_gold on the real data
-uv run python scripts/run_local.py --steps forecast           # train, backtest, MLflow (about 3 min)
+uv run python scripts/run_local.py --steps forecast           # train on lead-matched weather, backtest, MLflow (about 8 min)
 uv run python scripts/run_local.py --steps predict --run-date 2026-11-03
 uv run python scripts/model_report.py      # docs/evidence/model_metrics.md
 uv run pytest                              # unit + Spark tests (Spark tests skip without a JDK 17)

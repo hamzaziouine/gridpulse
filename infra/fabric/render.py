@@ -30,10 +30,11 @@ sys.path.insert(0, str(ROOT / "src"))
 ID_TOKENS = (
     "WORKSPACE_ID", "LAKEHOUSE_ID", "ENVIRONMENT_ID",
     "NB_BRONZE_ID", "NB_SILVER_ID", "NB_GOLD_ID", "NB_FORECAST_ID", "NB_PREDICT_ID",
-    "CONN_IESO_HTTP", "CONN_OPENMETEO_HIST", "CONN_OPENMETEO_FC", "CONN_SQL", "CONN_OUTLOOK",
+    "CONN_IESO_HTTP", "CONN_OPENMETEO_HIST", "CONN_OPENMETEO_FC", "CONN_OPENMETEO_PREV",
+    "CONN_SQL", "CONN_OUTLOOK",
 )  # fmt: skip
 TEXT_TOKENS = ("ALERT_TO", "SQL_DATABASE")
-NUMERIC_TOKENS = ("BACKFILL_YEARS", "BACKFILL_MONTHS")
+NUMERIC_TOKENS = ("BACKFILL_YEARS", "BACKFILL_MONTHS", "PREVRUNS_MONTHS")
 GUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 TOKEN_RE = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 OPTIONAL = {"CONN_OUTLOOK"}  # created in the UI; without it the mail activity is dropped
@@ -41,12 +42,17 @@ OPTIONAL = {"CONN_OUTLOOK"}  # created in the UI; without it the mail activity i
 
 def computed(today: date) -> dict[str, Any]:
     from gridpulse.config import FIRST_YEAR
-    from gridpulse.openmeteo import base_params
+    from gridpulse.openmeteo import PREVRUNS_FIRST_MONTH, base_params, prevruns_base_params
 
     return {
         "OPENMETEO_QUERY": urllib.parse.urlencode(base_params(), safe=",:"),
         "BACKFILL_YEARS": today.year - FIRST_YEAR + 1,
         "BACKFILL_MONTHS": (today.year - FIRST_YEAR) * 12 + today.month,
+        "PREVRUNS_QUERY": urllib.parse.urlencode(prevruns_base_params(), safe=",:"),
+        "PREVRUNS_MONTHS": (today.year - PREVRUNS_FIRST_MONTH.year) * 12
+        + today.month
+        - PREVRUNS_FIRST_MONTH.month
+        + 1,
         "SQL_DATABASE": "sqldb-hz2611-gridpulse",
     }
 

@@ -308,6 +308,87 @@
         }
       },
       {
+        "name": "cp_openmeteo_prevruns",
+        "description": "S2: Open-Meteo Previous Runs API (forecast 1 and 2 days before each hour), yesterday's month up to yesterday. Training input of nb_forecast.",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "set_month_start",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.02:00:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 120,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "BinarySource",
+            "storeSettings": {
+              "type": "HttpReadSettings",
+              "requestMethod": "GET"
+            },
+            "formatSettings": {
+              "type": "BinaryReadSettings"
+            },
+            "datasetSettings": {
+              "annotations": [],
+              "type": "Binary",
+              "typeProperties": {
+                "location": {
+                  "type": "HttpServerLocation",
+                  "relativeUrl": {
+                    "value": "@concat('v1/forecast?{{PREVRUNS_QUERY}}&start_date=', variables('v_month_start'), '&end_date=', variables('v_data_day'))",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "externalReferences": {
+                "connection": "{{CONN_OPENMETEO_PREV}}"
+              }
+            }
+          },
+          "sink": {
+            "type": "BinarySink",
+            "storeSettings": {
+              "type": "LakehouseWriteSettings"
+            },
+            "datasetSettings": {
+              "annotations": [],
+              "linkedService": {
+                "name": "lh_gridpulse",
+                "properties": {
+                  "annotations": [],
+                  "type": "Lakehouse",
+                  "typeProperties": {
+                    "workspaceId": "{{WORKSPACE_ID}}",
+                    "artifactId": "{{LAKEHOUSE_ID}}",
+                    "rootFolder": "Files"
+                  }
+                }
+              },
+              "type": "Binary",
+              "typeProperties": {
+                "location": {
+                  "type": "LakehouseLocation",
+                  "folderPath": "bronze/openmeteo_prevruns",
+                  "fileName": {
+                    "value": "@concat(substring(variables('v_data_day'), 0, 7), '.json')",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          },
+          "enableStaging": false
+        }
+      },
+      {
         "name": "fe_sql_reference",
         "description": "S3: Azure SQL dbo.sites/customers/meters to bronze_<table> (overwrite).",
         "type": "ForEach",
@@ -411,6 +492,12 @@
           },
           {
             "activity": "cp_openmeteo_forecast",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "cp_openmeteo_prevruns",
             "dependencyConditions": [
               "Succeeded"
             ]

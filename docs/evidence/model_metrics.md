@@ -1,11 +1,11 @@
 # Forecast model metrics (local run)
 
-Generated 2026-11-23 01:06 UTC by `scripts/model_report.py` from the
+Generated 2026-11-23 01:51 UTC by `scripts/model_report.py` from the
 gold tables written by `fabric/nb_forecast.Notebook` when run on a laptop through
 `scripts/run_local.py` (local Spark 3.5, real IESO and Open-Meteo data 2019 to 2026).
 **Tested locally only**: the same notebook has not run in Fabric yet.
 
-MLflow run `456340525b064a7f85b28bada02d0085` (local file store `mlruns/`), registered model `gridpulse_lgbm` version 1.
+MLflow run `078e123504194c85b17c4ecd0f901311` (local file store `mlruns/`), registered model `gridpulse_lgbm` version 2.
 
 ## Setup
 
@@ -14,6 +14,11 @@ MLflow run `456340525b064a7f85b28bada02d0085` (local file store `mlruns/`), regi
 - Model: LightGBM, L1 objective, 45 features (calendar, population-weighted weather and
   the 5 city temperatures, demand lags of 48 h and more). Rounds chosen by early stopping
   on 2025.
+- Weather (`train_weather = matched`): for each target day T, the Open-Meteo Previous
+  Runs forecast at the lead the daily run really has (HE1..HE17 forecast 1 day ahead,
+  HE18..HE24 2 days ahead), days T-1 and earlier from the Historical Forecast API.
+  Hours the Previous Runs archive does not cover keep Historical Forecast weather,
+  column by column: all variables before 2024-01-19, snowfall until 2024-12-06.
 - Baseline: seasonal naive, same hour one week earlier (known at issue time).
 - MAPE = mean absolute percentage error over hours; skill = 1 - MAPE model / MAPE naive.
 
@@ -21,8 +26,8 @@ MLflow run `456340525b064a7f85b28bada02d0085` (local file store `mlruns/`), regi
 
 | Evaluation | Period | Hours | Model MAPE % | Naive MAPE % | Model MAE (MW) | Skill vs naive % |
 |---|---|---|---|---|---|---|
-| Holdout: one model trained on 2019-2025, frozen | 2026-01-01 to 2026-11-05 | 7,411 | 2.70 | 6.84 | 458 | 60.5 |
-| Backtest: retrained every month on the data known then | 2025-01-01 to 2026-11-05 | 16,169 | 2.45 | 6.95 | 416 | 64.8 |
+| Holdout: one model trained on 2019-2025, frozen | 2026-01-01 to 2026-11-06 | 7,417 | 2.90 | 6.84 | 493 | 57.6 |
+| Backtest: retrained every month on the data known then | 2025-01-01 to 2026-11-06 | 16,175 | 2.56 | 6.95 | 435 | 63.1 |
 
 Success criterion 6 of the proposal (beat seasonal-naive MAPE by at least 30 %) is met
 in both evaluations, on historical data.
@@ -31,33 +36,35 @@ in both evaluations, on historical data.
 
 | Month | Model MAPE % | Naive MAPE % | Peak-hour APE % | Skill % | Hours |
 |---|---|---|---|---|---|
-| 2025-01 | 2.56 | 7.08 | 3.68 | 63.8 | 744 |
-| 2025-02 | 1.59 | 4.05 | 1.71 | 60.7 | 672 |
-| 2025-03 | 2.43 | 6.70 | 3.09 | 63.7 | 744 |
-| 2025-04 | 2.29 | 6.02 | 2.42 | 62.0 | 720 |
-| 2025-05 | 2.01 | 3.86 | 2.82 | 47.9 | 742 |
-| 2025-06 | 3.18 | 9.08 | 4.56 | 65.0 | 720 |
-| 2025-07 | 3.50 | 12.87 | 4.82 | 72.8 | 744 |
-| 2025-08 | 2.40 | 14.51 | 3.37 | 83.5 | 744 |
-| 2025-09 | 3.06 | 5.14 | 3.06 | 40.5 | 720 |
-| 2025-10 | 1.73 | 5.53 | 1.82 | 68.7 | 744 |
-| 2025-11 | 1.87 | 4.34 | 1.45 | 56.9 | 720 |
-| 2025-12 | 1.96 | 4.97 | 1.98 | 60.6 | 744 |
-| 2026-01 | 1.90 | 5.73 | 1.92 | 66.9 | 744 |
-| 2026-02 | 1.99 | 5.60 | 2.08 | 64.5 | 672 |
-| 2026-03 | 2.68 | 6.80 | 3.22 | 60.7 | 744 |
-| 2026-04 | 2.43 | 6.59 | 2.75 | 63.2 | 720 |
-| 2026-05 | 2.31 | 4.69 | 2.72 | 50.8 | 744 |
-| 2026-06 | 2.75 | 10.35 | 3.96 | 73.4 | 720 |
-| 2026-07 | 3.50 | 10.80 | 4.72 | 67.6 | 744 |
-| 2026-08 | 3.09 | 7.67 | 3.05 | 59.8 | 744 |
-| 2026-09 | 2.52 | 6.78 | 2.95 | 62.8 | 720 |
-| 2026-10 | 2.07 | 3.94 | 1.84 | 47.3 | 744 |
-| 2026-11 | 2.32 | 3.12 | 0.92 | 25.4 | 115 |
+| 2025-01 | 2.29 | 7.08 | 2.82 | 67.6 | 744 |
+| 2025-02 | 1.90 | 4.05 | 1.92 | 53.2 | 672 |
+| 2025-03 | 2.48 | 6.70 | 3.01 | 63.0 | 744 |
+| 2025-04 | 2.45 | 6.02 | 2.74 | 59.3 | 720 |
+| 2025-05 | 1.95 | 3.86 | 2.32 | 49.4 | 742 |
+| 2025-06 | 3.40 | 9.08 | 4.73 | 62.6 | 720 |
+| 2025-07 | 3.54 | 12.87 | 4.55 | 72.5 | 744 |
+| 2025-08 | 2.37 | 14.51 | 3.25 | 83.6 | 744 |
+| 2025-09 | 3.17 | 5.14 | 3.63 | 38.3 | 720 |
+| 2025-10 | 1.69 | 5.53 | 1.30 | 69.5 | 744 |
+| 2025-11 | 1.79 | 4.34 | 1.46 | 58.7 | 720 |
+| 2025-12 | 2.11 | 4.97 | 2.08 | 57.5 | 744 |
+| 2026-01 | 2.01 | 5.73 | 1.93 | 65.0 | 744 |
+| 2026-02 | 2.14 | 5.60 | 1.78 | 61.8 | 672 |
+| 2026-03 | 2.60 | 6.80 | 3.03 | 61.8 | 744 |
+| 2026-04 | 2.72 | 6.59 | 2.64 | 58.7 | 720 |
+| 2026-05 | 2.47 | 4.69 | 3.22 | 47.3 | 744 |
+| 2026-06 | 3.07 | 10.35 | 4.88 | 70.3 | 720 |
+| 2026-07 | 3.85 | 10.80 | 4.69 | 64.4 | 744 |
+| 2026-08 | 3.42 | 7.67 | 3.68 | 55.4 | 744 |
+| 2026-09 | 2.94 | 6.78 | 3.32 | 56.6 | 720 |
+| 2026-10 | 2.05 | 3.94 | 2.06 | 47.8 | 744 |
+| 2026-11 | 2.09 | 3.13 | 1.03 | 33.1 | 121 |
 
 ## Scored with weather of the production lead time
 
-The tables above use Historical Forecast weather. In production the forecast for day T
+The tables above come from the notebook trained on lead-matched weather (its
+default since 2026-11-23). This section is the comparison behind that choice.
+In production the forecast for day T
 is fetched on T-1 at 13:15 UTC, so the target hours are 23 to 46 h after the newest
 model run. `scripts/backtest_weather_lead.py` replaces the weather of each target day
 with the Open-Meteo Previous Runs API (same model gfs_seamless, same 5 cities and 9
@@ -144,12 +151,11 @@ Backtest by month, models trained as above:
 
 ## Limitations
 
-- Weather inputs of the tables at the top come from the Open-Meteo Historical Forecast
-  API (lead of a few hours). The section above measures the effect of the longer lead
-  used in production on 2024-12 to 2026-11 only, because the Previous Runs archive is
-  not complete before. Live rows (`split = 'live'` in `gold_forecast`) measure the real
-  error once the daily pipeline runs in Fabric.
-- Hardest months in the backtest: 2026-07 (3.50 %), 2025-07 (3.50 %), 2025-06 (3.18 %).
+- Lead-matched weather exists only from 2024 (complete from 2024-12-07), so most training
+  years still use Historical Forecast weather for day T. The section above measures the
+  lead effect on 2024-12 to 2026-11 only. Live rows (`split = 'live'` in `gold_forecast`)
+  measure the real error once the daily pipeline runs in Fabric.
+- Hardest months in the backtest: 2026-07 (3.85 %), 2025-07 (3.54 %), 2026-08 (3.42 %).
   Summer air-conditioning load swings with temperature, so weather forecast error
   matters most then.
 - The model does not know about outages, large industrial changes or market rule changes

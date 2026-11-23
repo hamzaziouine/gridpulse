@@ -32,6 +32,14 @@
 #    issue of the month, scoring the whole month.
 # 3. **Production model**: refit on every complete day, logged and registered with MLflow.
 # 4. Predictions and monthly errors go to `gold_forecast` and `gold_forecast_eval` for Power BI.
+#
+# Weather input (`train_weather`, default `matched`): the daily forecast scores day T with a
+# weather forecast 23 to 46 h old, so the model is trained and evaluated on the same kind of
+# weather: Open-Meteo Previous Runs (`silver_weather_prevruns_ontario`), HE1..HE17 forecast one
+# day ahead and HE18..HE24 two days ahead. Fallback, column by column: hours the Previous Runs
+# data does not cover keep the Historical Forecast weather (before 2024-01-19 all variables,
+# snowfall until 2024-12-06). Without the table at all, or with `train_weather = "historical"`,
+# the notebook trains on the Historical Forecast weather only (the behaviour before 2026-11-23).
 
 # PARAMETERS CELL ********************
 
@@ -42,6 +50,7 @@ validation_start = "2025-01-01"
 holdout_start = "2026-01-01"
 backtest_start = "2025-01-01"
 register_model = True
+train_weather = "matched"  # matched (lead-matched Previous Runs weather) | historical
 
 # METADATA ********************
 
@@ -76,6 +85,7 @@ from mlflow.models import infer_signature
 
 from gridpulse import features as fx
 from gridpulse import forecast as fc
+from gridpulse import weather_lead as wl
 from gridpulse.lakehouse import FabricStore
 
 spark.conf.set("spark.sql.session.timeZone", "UTC")
@@ -92,6 +102,9 @@ def as_date(s: str):
 RUN_DATE = as_date(run_date) if run_date else datetime.now(UTC).date()
 VAL_START, HOLDOUT_START, BT_START = map(as_date, (validation_start, holdout_start, backtest_start))
 REGISTER = str(register_model).lower() in ("true", "1")
+TRAIN_WEATHER = str(train_weather).strip().lower()
+if TRAIN_WEATHER not in ("matched", "historical"):
+    raise ValueError(f"train_weather must be 'matched' or 'historical', got {train_weather!r}")
 print(f"gridpulse {gridpulse.__version__} | run_date {RUN_DATE} | mlflow {mlflow.__version__}")
 
 # METADATA ********************
@@ -105,7 +118,19 @@ print(f"gridpulse {gridpulse.__version__} | run_date {RUN_DATE} | mlflow {mlflow
 
 # Features on the Spark driver: ~69k hours x 45 features is a few MB, LightGBM trains in seconds.
 hist = store.read("silver_demand_weather_hourly").toPandas()
-feats = fx.build_features(hist)
+lead_info = {"policy": "none"}
+if TRAIN_WEATHER == "matched" and store.exists("silver_weather_prevruns_ontario"):
+    prev = store.read("silver_weather_prevruns_ontario").toPandas()
+    feats, lead_info = wl.matched_training_features(hist, prev)
+    WEATHER_SOURCE = "lead_matched"
+    print(f"weather: lead-matched where covered ({lead_info['hours_full_lead']:,} of "
+          f"{lead_info['hours_total']:,} hours, full days {lead_info['first_full_lead_day']} .. "
+          f"{lead_info['last_full_lead_day']}), historical weather elsewhere")  # fmt: skip
+else:
+    if TRAIN_WEATHER == "matched":
+        print("WARNING: silver_weather_prevruns_ontario missing, training on historical weather")
+    feats = fx.build_features(hist)
+    WEATHER_SOURCE = "historical_forecast"
 ok = feats[fc.usable(feats)]
 print(f"{len(feats):,} feature rows, {len(ok):,} with actual and weather, "
       f"{ok['est_date'].min()} .. {ok['est_date'].max()}")  # fmt: skip
@@ -177,7 +202,9 @@ with mlflow.start_run(run_name=f"train-{RUN_DATE}") as run:
                        "holdout": f"{HOLDOUT_START}..{test_set['est_date'].max()}",
                        "backtest_from": str(BT_START),
                        "production_rows": len(ok),
-                       "production_until": str(ok["est_date"].max())})  # fmt: skip
+                       "production_until": str(ok["est_date"].max()),
+                       "train_weather": WEATHER_SOURCE,
+                       **{f"lead_{k}": v for k, v in lead_info.items()}})  # fmt: skip
     mlflow.log_metrics({f"holdout_{k}": v for k, v in holdout_summary.items()})
     mlflow.log_metrics({f"backtest_{k}": v for k, v in backtest_summary.items()})
     bt_eval = fc.monthly_eval(backtest, "backtest", run.info.run_id)
@@ -215,8 +242,8 @@ print(f"MLflow run {RUN_ID}, registered {model_name} version {MODEL_VERSION}")
 
 # 4. Gold tables for the "Forecast vs actual" report page.
 rows = pd.concat([
-    fc.forecast_rows(backtest, "backtest", MODEL_VERSION, RUN_ID, "historical_forecast"),
-    fc.forecast_rows(holdout, "holdout", MODEL_VERSION, RUN_ID, "historical_forecast"),
+    fc.forecast_rows(backtest, "backtest", MODEL_VERSION, RUN_ID, WEATHER_SOURCE),
+    fc.forecast_rows(holdout, "holdout", MODEL_VERSION, RUN_ID, WEATHER_SOURCE),
 ], ignore_index=True)  # fmt: skip
 evals = pd.concat([bt_eval, fc.monthly_eval(holdout, "holdout", RUN_ID)], ignore_index=True)
 FORECAST_SCHEMA = (

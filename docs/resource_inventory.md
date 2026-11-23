@@ -35,9 +35,9 @@ Fabric items have no SKU of their own; they all run on the workspace's capacity.
 | `env_gridpulse` | Environment (gridpulse wheel + `holidays`) | same | trial | $0 | `deploy_fabric.ps1` (`fab import`, publish can take minutes) | not created yet | with the workspace |
 | `nb_bronze`, `nb_silver`, `nb_gold` | Notebooks | same | trial (Spark) | $0 | `deploy_fabric.ps1` from `fabric/*.Notebook` | not created yet (tested locally) | with the workspace |
 | `nb_forecast`, `nb_predict` | Notebooks | same | trial (Spark) | $0 | `deploy_fabric.ps1` | not created yet (files written; local backtest in progress on 2026-11-22) | with the workspace |
-| `pl_daily_ingest` | Data pipeline (13 activities) + daily schedule 13:15 UTC | same | trial | $0 | `deploy_fabric.ps1` (definition from `infra/fabric/gen_pipelines.py`, ids filled by `render.py`) | not created yet | turn the schedule off first, then with the workspace |
-| `pl_backfill` | Data pipeline (one-off, 10 activities) | same | trial | $0 | `deploy_fabric.ps1` | not created yet | with the workspace |
-| `con_ieso_http`, `con_openmeteo_hist`, `con_openmeteo_fc`, `con_sql_gridpulse` | Fabric connections (tenant-level, outside the workspace) | n/a | n/a | $0 | `deploy_fabric.ps1` (SQL password from Key Vault through a temp file) | not created yet | delete by hand in Settings > Manage connections and gateways; workspace deletion does not remove them |
+| `pl_daily_ingest` | Data pipeline (14 activities) + daily schedule 13:15 UTC | same | trial | $0 | `deploy_fabric.ps1` (definition from `infra/fabric/gen_pipelines.py`, ids filled by `render.py`) | not created yet | turn the schedule off first, then with the workspace |
+| `pl_backfill` | Data pipeline (one-off, 11 activities) | same | trial | $0 | `deploy_fabric.ps1` | not created yet | with the workspace |
+| `con_ieso_http`, `con_openmeteo_hist`, `con_openmeteo_fc`, `con_openmeteo_prev`, `con_sql_gridpulse` | Fabric connections (tenant-level, outside the workspace) | n/a | n/a | $0 | `deploy_fabric.ps1` (SQL password from Key Vault through a temp file) | not created yet | delete by hand in Settings > Manage connections and gateways; workspace deletion does not remove them |
 | `con_outlook_alerts` | Fabric connection, OAuth (Office 365 Outlook) | n/a | n/a | $0 | UI only (T3.6); rerun the deploy afterwards so the mail activity is added | not created yet | delete by hand, as above |
 | `es_meters` | Eventstream (custom endpoint source, Eventhouse destination) | same | trial | $0 | empty item by `deploy_fabric.ps1`; source and destination in the UI | not created yet | with the workspace |
 | `eh_gridpulse` | Eventhouse + KQL database, table `meter_readings` (7-day retention) | same | trial | $0 | `deploy_fabric.ps1` + `infra/fabric/run_kql.py` (runs `realtime/kql/00_tables.kql`) | not created yet | with the workspace |
@@ -75,7 +75,7 @@ Cleanup happens only after the grade is published (PLAN T12.2), with Nacir's agr
    - MLflow metrics into `docs/evidence/model_metrics.md`;
    - screenshots into `docs/evidence/`.
 5. Delete the workspace (Nacir, workspace Admin): `fab rm ws_gridpulse.Workspace -f`. Check that `fab ls` no longer lists it.
-6. Delete the Fabric connections, which live outside the workspace: `con_ieso_http`, `con_openmeteo_hist`, `con_openmeteo_fc`, `con_sql_gridpulse`, `con_outlook_alerts`, and the GitHub connection if one was made. Revoke the GitHub token.
+6. Delete the Fabric connections, which live outside the workspace: `con_ieso_http`, `con_openmeteo_hist`, `con_openmeteo_fc`, `con_openmeteo_prev`, `con_sql_gridpulse`, `con_outlook_alerts`, and the GitHub connection if one was made. Revoke the GitHub token.
 7. Delete the Azure resource group: `powershell -File infra\azure\cleanup.ps1`. The script refuses any RG other than `rg-hz2611-cdda` and the protected `TP6` and `tp1`, lists what it will delete, and asks for the RG name to be typed back. It removes the SQL server and database, the Key Vault, the policy and role assignments at RG scope, and the budget.
 8. Key Vault purge. `cleanup.ps1` runs `az keyvault purge -n kv-hz2611-cdda` but ignores its errors. Check with:
 

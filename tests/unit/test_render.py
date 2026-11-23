@@ -17,6 +17,7 @@ assert spec and spec.loader
 render = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(render)
 DAILY = ROOT / "fabric" / "pl_daily_ingest.DataPipeline" / "pipeline-content.json"
+BACKFILL = ROOT / "fabric" / "pl_backfill.DataPipeline" / "pipeline-content.json"
 
 
 @pytest.fixture
@@ -95,9 +96,40 @@ def test_daily_pipeline_shape() -> None:
         assert acts[nxt]["dependsOn"] == [{"activity": prev, "dependencyConditions": ["Succeeded"]}]
     bronze_deps = {d["activity"] for d in acts["nb_bronze"]["dependsOn"]}
     assert bronze_deps == {"cp_ieso_demand", "cp_openmeteo_history", "cp_openmeteo_forecast",
-                           "fe_sql_reference"}  # fmt: skip
+                           "cp_openmeteo_prevruns", "fe_sql_reference"}  # fmt: skip
     assert acts["nb_bronze"]["typeProperties"]["parameters"]["full_refresh"]["value"] is False
     assert acts["mail_failure"]["dependsOn"][0]["dependencyConditions"] == ["Failed", "Skipped"]
+    prev = acts["cp_openmeteo_prevruns"]["typeProperties"]
+    url = prev["source"]["datasetSettings"]["typeProperties"]["location"]["relativeUrl"]["value"]
+    assert "{{PREVRUNS_QUERY}}" in url and "v_month_start" in url and "v_data_day" in url
+    assert prev["source"]["datasetSettings"]["externalReferences"]["connection"] == (
+        "{{CONN_OPENMETEO_PREV}}"
+    )
+    sink = prev["sink"]["datasetSettings"]["typeProperties"]["location"]
+    assert sink["folderPath"] == "bronze/openmeteo_prevruns"
+
+
+def test_backfill_pulls_previous_runs_and_trains_on_matched_weather() -> None:
+    body = json.loads(BACKFILL.read_text())
+    acts = {a["name"]: a for a in body["properties"]["activities"]}
+    assert "fe_prevruns_months" in {d["activity"] for d in acts["nb_bronze"]["dependsOn"]}
+    fe = acts["fe_prevruns_months"]["typeProperties"]
+    assert fe["isSequential"] is True
+    assert "prevruns_month_count" in fe["items"]["value"]
+    params = body["properties"]["parameters"]
+    assert params["prevruns_start_month"]["defaultValue"] == "2024-01-01"
+    nb = acts["nb_forecast"]["typeProperties"]["parameters"]
+    assert nb["train_weather"]["value"] == "matched"
+
+
+def test_prevruns_tokens_render() -> None:
+    v = render.computed(date(2026, 11, 22))
+    assert v["PREVRUNS_MONTHS"] == 35  # 2024-01 .. 2026-11
+    assert "temperature_2m_previous_day1" in v["PREVRUNS_QUERY"]
+    assert "snowfall_previous_day2" in v["PREVRUNS_QUERY"]
+    assert "start_date" not in v["PREVRUNS_QUERY"]
+    body = json.loads(render.render_text(BACKFILL.read_text(), values()))
+    assert body["properties"]["parameters"]["prevruns_month_count"]["defaultValue"] == 35
 
 
 def test_kql_file_splits_into_three_idempotent_commands() -> None:

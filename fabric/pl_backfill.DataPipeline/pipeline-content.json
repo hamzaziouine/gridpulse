@@ -1,6 +1,6 @@
 {
   "properties": {
-    "description": "GridPulse one-off backfill: every IESO year and Open-Meteo month since 2019, full bronze refresh, silver, gold, then model training (nb_forecast). Safe to rerun.",
+    "description": "GridPulse one-off backfill: every IESO year and Open-Meteo month since 2019, Previous Runs months since 2024, full bronze refresh, silver, gold, then model training on lead-matched weather (nb_forecast). Safe to rerun.",
     "activities": [
       {
         "name": "set_run_date",
@@ -212,6 +212,102 @@
         }
       },
       {
+        "name": "fe_prevruns_months",
+        "type": "ForEach",
+        "dependsOn": [
+          {
+            "activity": "set_run_date",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "description": "S2: Previous Runs API, one request per month from prevruns_start_month (2024-01: full coverage of the 9 variables starts in 2024).",
+        "typeProperties": {
+          "items": {
+            "value": "@range(0, pipeline().parameters.prevruns_month_count)",
+            "type": "Expression"
+          },
+          "isSequential": true,
+          "activities": [
+            {
+              "name": "cp_prevruns_month",
+              "description": "One calendar month of the Previous Runs API (capped at yesterday).",
+              "type": "Copy",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.02:00:00",
+                "retry": 2,
+                "retryIntervalInSeconds": 120,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "source": {
+                  "type": "BinarySource",
+                  "storeSettings": {
+                    "type": "HttpReadSettings",
+                    "requestMethod": "GET"
+                  },
+                  "formatSettings": {
+                    "type": "BinaryReadSettings"
+                  },
+                  "datasetSettings": {
+                    "annotations": [],
+                    "type": "Binary",
+                    "typeProperties": {
+                      "location": {
+                        "type": "HttpServerLocation",
+                        "relativeUrl": {
+                          "value": "@concat('v1/forecast?{{PREVRUNS_QUERY}}&start_date=', formatDateTime(addToTime(pipeline().parameters.prevruns_start_month, item(), 'Month'), 'yyyy-MM-dd'), '&end_date=', if(greater(ticks(addDays(addToTime(pipeline().parameters.prevruns_start_month, add(item(), 1), 'Month'), -1)), ticks(addDays(utcNow(), -1))), formatDateTime(addDays(utcNow(), -1), 'yyyy-MM-dd'), formatDateTime(addDays(addToTime(pipeline().parameters.prevruns_start_month, add(item(), 1), 'Month'), -1), 'yyyy-MM-dd')))",
+                          "type": "Expression"
+                        }
+                      }
+                    },
+                    "externalReferences": {
+                      "connection": "{{CONN_OPENMETEO_PREV}}"
+                    }
+                  }
+                },
+                "sink": {
+                  "type": "BinarySink",
+                  "storeSettings": {
+                    "type": "LakehouseWriteSettings"
+                  },
+                  "datasetSettings": {
+                    "annotations": [],
+                    "linkedService": {
+                      "name": "lh_gridpulse",
+                      "properties": {
+                        "annotations": [],
+                        "type": "Lakehouse",
+                        "typeProperties": {
+                          "workspaceId": "{{WORKSPACE_ID}}",
+                          "artifactId": "{{LAKEHOUSE_ID}}",
+                          "rootFolder": "Files"
+                        }
+                      }
+                    },
+                    "type": "Binary",
+                    "typeProperties": {
+                      "location": {
+                        "type": "LakehouseLocation",
+                        "folderPath": "bronze/openmeteo_prevruns",
+                        "fileName": {
+                          "value": "@concat(formatDateTime(addToTime(pipeline().parameters.prevruns_start_month, item(), 'Month'), 'yyyy-MM'), '.json')",
+                          "type": "Expression"
+                        }
+                      }
+                    }
+                  }
+                },
+                "enableStaging": false
+              }
+            }
+          ]
+        }
+      },
+      {
         "name": "fe_sql_reference",
         "description": "S3: Azure SQL dbo.sites/customers/meters to bronze_<table> (overwrite).",
         "type": "ForEach",
@@ -309,6 +405,12 @@
           },
           {
             "activity": "fe_openmeteo_months",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "fe_prevruns_months",
             "dependencyConditions": [
               "Succeeded"
             ]
@@ -437,6 +539,10 @@
                 "type": "Expression"
               },
               "type": "string"
+            },
+            "train_weather": {
+              "value": "matched",
+              "type": "string"
             }
           }
         }
@@ -514,6 +620,14 @@
       "month_count": {
         "type": "int",
         "defaultValue": "{{BACKFILL_MONTHS}}"
+      },
+      "prevruns_start_month": {
+        "type": "string",
+        "defaultValue": "2024-01-01"
+      },
+      "prevruns_month_count": {
+        "type": "int",
+        "defaultValue": "{{PREVRUNS_MONTHS}}"
       }
     },
     "variables": {

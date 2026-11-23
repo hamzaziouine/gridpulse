@@ -5,10 +5,12 @@
 # Steps:
 #   1. workspace ws_gridpulse (created on the trial capacity if missing) and, with -AssignRoles,
 #      Hamza = Member, Omar = Viewer (PLAN 5.1; run that part as the Admin persona)
-#   2. lakehouse lh_gridpulse, Files/bronze/{ieso,openmeteo,openmeteo_forecast}, Files/libs + wheel
+#   2. lakehouse lh_gridpulse, Files/bronze/{ieso,openmeteo,openmeteo_forecast,openmeteo_prevruns},
+#      Files/libs + wheel
 #   3. environment env_gridpulse (holidays + gridpulse wheel), published by `fab import`
 #   4. notebooks nb_bronze, nb_silver, nb_gold, nb_forecast, nb_predict
-#   5. connections con_ieso_http, con_openmeteo_hist, con_openmeteo_fc, con_sql_gridpulse
+#   5. connections con_ieso_http, con_openmeteo_hist, con_openmeteo_fc, con_openmeteo_prev,
+#      con_sql_gridpulse
 #      (SQL password read from Key Vault, passed in a temp file, deleted at once);
 #      con_outlook_alerts is OAuth, created once in the UI: if it exists its id is used, otherwise
 #      the pipelines are imported without the mail activity (the Fail activity still marks the run)
@@ -52,7 +54,7 @@ $Environment = 'env_gridpulse'
 $Notebooks = @('nb_bronze', 'nb_silver', 'nb_gold', 'nb_forecast', 'nb_predict')
 $Pipelines = @('pl_daily_ingest', 'pl_backfill')
 $Folders = @('Files/bronze', 'Files/bronze/ieso', 'Files/bronze/openmeteo',
-             'Files/bronze/openmeteo_forecast', 'Files/libs')
+             'Files/bronze/openmeteo_forecast', 'Files/bronze/openmeteo_prevruns', 'Files/libs')
 # Alert addresses and persona object ids come from infra/local.settings.json (git-ignored,
 # template infra/local.settings.example.json). -DryRun falls back to the template placeholders.
 . "$PSScriptRoot\..\local_settings.ps1"
@@ -149,7 +151,8 @@ $envPath = "$ws/$Environment.Environment"
 $envExists = Test-FabExists $envPath
 $ids.ENVIRONMENT_ID = if ($envExists) { Get-FabId $envPath } else { $FakeId }
 foreach ($t in 'NB_BRONZE_ID', 'NB_SILVER_ID', 'NB_GOLD_ID', 'NB_FORECAST_ID', 'NB_PREDICT_ID',
-               'CONN_IESO_HTTP', 'CONN_OPENMETEO_HIST', 'CONN_OPENMETEO_FC', 'CONN_SQL') {
+               'CONN_IESO_HTTP', 'CONN_OPENMETEO_HIST', 'CONN_OPENMETEO_FC', 'CONN_OPENMETEO_PREV',
+               'CONN_SQL') {
     if (-not $ids.Contains($t)) { $ids[$t] = $FakeId }
 }
 Write-Ids $ids
@@ -189,6 +192,7 @@ function Set-HttpConnection($name, $url, $token) {
 Set-HttpConnection 'con_ieso_http' 'https://reports-public.ieso.ca/public/Demand/' 'CONN_IESO_HTTP'
 Set-HttpConnection 'con_openmeteo_hist' 'https://historical-forecast-api.open-meteo.com/' 'CONN_OPENMETEO_HIST'
 Set-HttpConnection 'con_openmeteo_fc' 'https://api.open-meteo.com/' 'CONN_OPENMETEO_FC'
+Set-HttpConnection 'con_openmeteo_prev' 'https://previous-runs-api.open-meteo.com/' 'CONN_OPENMETEO_PREV'
 
 $sqlConn = '.connections/con_sql_gridpulse.Connection'
 if (Test-FabExists $sqlConn) {

@@ -26,7 +26,7 @@ WEATHER_NAMES = {
 }
 
 
-def lead_section() -> list[str]:
+def lead_section(source: str) -> list[str]:
     """Day-ahead weather lead check (scripts/backtest_weather_lead.py), if it has been run."""
     if not LEAD.exists():
         return []
@@ -35,7 +35,15 @@ def lead_section() -> list[str]:
     lines = [
         "## Scored with weather of the production lead time",
         "",
-        "The tables above use Historical Forecast weather. In production the forecast for day T",
+        *(
+            [
+                "The tables above come from the notebook trained on lead-matched weather (its",
+                "default since 2026-11-23). This section is the comparison behind that choice.",
+            ]
+            if source == "lead_matched"
+            else ["The tables above use Historical Forecast weather."]
+        ),
+        "In production the forecast for day T",
         "is fetched on T-1 at 13:15 UTC, so the target hours are 23 to 46 h after the newest",
         "model run. `scripts/backtest_weather_lead.py` replaces the weather of each target day",
         "with the Open-Meteo Previous Runs API (same model gfs_seamless, same 5 cities and 9",
@@ -113,6 +121,20 @@ def main() -> None:
     ev = pd.read_parquet(TABLES / "gold_forecast_eval" / "data.parquet")
     run_id = fc.loc[fc["split"] != "live", "run_id"].iloc[0]
     version = fc.loc[fc["split"] != "live", "model_version"].iloc[0]
+    source = fc.loc[fc["split"] != "live", "weather_source"].iloc[0]
+    if source == "lead_matched":
+        weather_lines = [
+            "- Weather (`train_weather = matched`): for each target day T, the Open-Meteo Previous",
+            "  Runs forecast at the lead the daily run really has (HE1..HE17 forecast 1 day ahead,",
+            "  HE18..HE24 2 days ahead), days T-1 and earlier from the Historical Forecast API.",
+            "  Hours the Previous Runs archive does not cover keep Historical Forecast weather,",
+            "  column by column: all variables before 2024-01-19, snowfall until 2024-12-06.",
+        ]
+    else:
+        weather_lines = [
+            "- Weather: Open-Meteo Historical Forecast API (lead of a few hours; production has",
+            "  23 to 46 h, see the section on the production lead time).",
+        ]
     lines = [
         "# Forecast model metrics (local run)",
         "",
@@ -131,6 +153,7 @@ def main() -> None:
         "- Model: LightGBM, L1 objective, 45 features (calendar, population-weighted weather and",
         "  the 5 city temperatures, demand lags of 48 h and more). Rounds chosen by early stopping",
         "  on 2025.",
+        *weather_lines,
         "- Baseline: seasonal naive, same hour one week earlier (known at issue time).",
         "- MAPE = mean absolute percentage error over hours; skill = 1 - MAPE model / MAPE naive.",
         "",
@@ -167,15 +190,14 @@ def main() -> None:
     lgb_rows = bt[bt["model"] == "lightgbm"].sort_values("mape_pct", ascending=False).head(3)
     worst = ", ".join(f"{r.month_start:%Y-%m} ({r.mape_pct:.2f} %)" for r in lgb_rows.itertuples())
     lines.append("")
-    lines += lead_section()
+    lines += lead_section(source)
     lines += [
         "## Limitations",
         "",
-        "- Weather inputs of the tables at the top come from the Open-Meteo Historical Forecast",
-        "  API (lead of a few hours). The section above measures the effect of the longer lead",
-        "  used in production on 2024-12 to 2026-11 only, because the Previous Runs archive is",
-        "  not complete before. Live rows (`split = 'live'` in `gold_forecast`) measure the real",
-        "  error once the daily pipeline runs in Fabric.",
+        "- Lead-matched weather exists only from 2024 (complete from 2024-12-07), so most training",
+        "  years still use Historical Forecast weather for day T. The section above measures the",
+        "  lead effect on 2024-12 to 2026-11 only. Live rows (`split = 'live'` in `gold_forecast`)",
+        "  measure the real error once the daily pipeline runs in Fabric.",
         f"- Hardest months in the backtest: {worst}.",
         "  Summer air-conditioning load swings with temperature, so weather forecast error",
         "  matters most then.",

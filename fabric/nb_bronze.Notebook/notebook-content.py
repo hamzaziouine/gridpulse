@@ -24,9 +24,10 @@
 # # nb_bronze: landed files to bronze Delta tables
 #
 # Reads the raw files that `pl_daily_ingest` copied into `Files/bronze/` and writes them, typed and
-# with lineage columns, to `bronze_ieso_demand`, `bronze_openmeteo_hourly` and
-# `bronze_openmeteo_forecast`. No business rules here: hour-ending, time zones, revisions and
-# quality are handled in `nb_silver`.
+# with lineage columns, to `bronze_ieso_demand`, `bronze_openmeteo_hourly`,
+# `bronze_openmeteo_forecast` and `bronze_openmeteo_prevruns` (Previous Runs API, training input).
+# No business rules here: hour-ending, time zones, revisions and quality are handled in
+# `nb_silver`.
 #
 # A daily run (`full_refresh = False`) re-ingests only the files of yesterday's year/month and
 # today's forecast, replacing the rows of those files, so running it twice changes nothing. The
@@ -90,12 +91,15 @@ print(f"gridpulse {gridpulse.__version__} | run_date {RUN_DATE} | full_refresh {
 ieso_files = store.list_files("bronze/ieso", "PUB_Demand_*.csv")
 om_files = store.list_files("bronze/openmeteo", "*.json")
 fc_files = store.list_files("bronze/openmeteo_forecast", "*.json")
+pr_files = store.list_files("bronze/openmeteo_prevruns", "*.json")
 if not FULL:
     ieso_files = [f for f in ieso_files if f"PUB_Demand_{DATA_DAY.year}" in f]
     om_files = [f for f in om_files if f.endswith(f"{DATA_DAY:%Y-%m}.json")]
     fc_files = [f for f in fc_files if f.endswith(f"{RUN_DATE.isoformat()}.json")]
+    pr_files = [f for f in pr_files if f.endswith(f"{DATA_DAY:%Y-%m}.json")]
 print(f"IESO files: {file_names(ieso_files)}")
-print(f"Open-Meteo history files: {len(om_files)}, forecast files: {file_names(fc_files)}")
+print(f"Open-Meteo history files: {len(om_files)}, forecast files: {file_names(fc_files)}, "
+      f"previous-runs files: {len(pr_files)}")  # fmt: skip
 if not ieso_files or not om_files:
     raise FileNotFoundError("nothing landed for this run: check the pipeline copy activities")
 
@@ -142,3 +146,25 @@ if fc_files:
     print(f"bronze_openmeteo_forecast: {n_fc:,} rows written")
 else:
     print("no forecast file for this run (backfill or local run)")
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# Open-Meteo Previous Runs JSON -> bronze_openmeteo_prevruns (one row per city, hour and lead).
+# Optional source: without files (before the first copy) nb_forecast trains on historical weather.
+if pr_files:
+    pr = bronze.read_openmeteo_prevruns(spark, pr_files, cities, INGESTED_AT, RUN_DATE)
+    n_pr = store.write(
+        pr,
+        "bronze_openmeteo_prevruns",
+        replace=None if FULL else {"source_file": file_names(pr_files)},
+    )
+    print(f"bronze_openmeteo_prevruns: {n_pr:,} rows written")
+else:
+    print("no previous-runs file for this run")

@@ -137,7 +137,7 @@ then one row per hour. Volume (`docs/data_profile.md`): 8 yearly files, 2019-01-
 
 ### 2.2 S2: Open-Meteo weather JSON
 
-Two endpoints, same request shape (`src/gridpulse/openmeteo.py`):
+Three endpoints, same request shape (`src/gridpulse/openmeteo.py`):
 
 - Historical Forecast API (`historical-forecast-api.open-meteo.com/v1/forecast`): the forecasts as
   they were issued at the time, so the model never trains on weather it would not have had
@@ -145,6 +145,14 @@ Two endpoints, same request shape (`src/gridpulse/openmeteo.py`):
   months (2019-01 to 2026-11), 68,784 hours, no null cells.
 - Forecast API: the coming days, one file per run date, `Files/bronze/openmeteo_forecast/YYYY-MM-DD.json`.
   Used by the daily scoring notebook for the live forecast.
+- Previous Runs API (`previous-runs-api.open-meteo.com/v1/forecast`): for every hour, the value
+  the same model forecast about one day (`<variable>_previous_day1`) and two days
+  (`<variable>_previous_day2`) before it. One file per calendar month from 2024-01,
+  `Files/bronze/openmeteo_prevruns/YYYY-MM.json`. Coverage for `gfs_seamless`: 8 variables from
+  2024-01-19 12:00Z (day 1), snowfall from 2024-12-06 18:00Z; null before. Local pull: 35 files,
+  24,984 hours per lead. The API returns `cloud_cover` of 101 % (62 city-hours) and -1 % (10
+  city-hours) for some day-2 hours; they are kept as delivered. Training input of `nb_forecast`
+  (lead-matched weather, section 7).
 
 Request parameters: `latitude` and `longitude` (the five cities of section 1.3, in that order),
 `hourly` (the nine variables below), `models=gfs_seamless` (pinned, no silent model switch),
@@ -322,6 +330,20 @@ each city object are exploded into rows).
 | `ingested_at` | timestamp | UTC | When `nb_bronze` read the file | Internal | notebook |
 | `run_date` | date | | Run date of `nb_bronze` | Internal | notebook parameter |
 
+### `bronze_openmeteo_prevruns`
+
+Previous Runs API files. One row per city, hour and lead: the arrays `<variable>_previous_day1`
+and `<variable>_previous_day2` are exploded separately and get the plain variable names plus
+`lead_days`. Local run: 249,840 rows (24,984 hours x 5 cities x 2 leads).
+
+| Column | Type | Unit | Description | Sensitivity | Lineage |
+|---|---|---|---|---|---|
+| `valid_time` | timestamp | UTC | Hour the forecast is for | Public | S2 `hourly.time` |
+| `lead_days` | int | days | 1 = forecast about 24 h before the hour, 2 = about 48 h before | Public | array name suffix |
+| `city_key` | string | | As in `bronze_openmeteo_hourly` | Public | grid coordinates |
+| `temperature_2m` ... `snowfall` | double | as S2 | The 9 variables at that lead; null before the API's coverage starts | Public | S2 `<variable>_previous_dayN` |
+| `grid_latitude`, `grid_longitude`, `source_file`, `ingested_at`, `run_date` | | | As in `bronze_openmeteo_hourly` | | |
+
 ### `bronze_sites`, `bronze_customers`, `bronze_meters`
 
 Copies of the three Azure SQL tables written by the pipeline's Copy activity (locally:
@@ -424,6 +446,25 @@ hour. Read by the daily scoring notebook (`nb_predict`).
 | `valid_time` | timestamp | UTC | Forecast hour | Public | `bronze_openmeteo_forecast` |
 | `issued_on` | date | | Run date in the file name `YYYY-MM-DD.json` (the issue day of the forecast) | Public | `source_file` |
 | `temperature_2m_w` ... `snowfall_w`, `temperature_2m_mean`, `n_cities`, the five city temperatures, `hdd_w`, `cdd_w` | as in `silver_weather_ontario_hourly` | | Forecast values | Public | same rules |
+
+### `silver_weather_prevruns_ontario`
+
+Built when `bronze_openmeteo_prevruns` exists. One row per hour and lead (local run: 49,968 =
+24,984 x 2). Same population weights as `silver_weather_ontario_hourly`, with one difference: an
+aggregate (and `temperature_2m_mean`, `hdd_w`, `cdd_w` for the temperature) is null unless all
+five cities have the value, because before the API's coverage most variables are null and a mean
+over the cities present would be a different quantity. Read by `nb_forecast`.
+
+| Column | Type | Unit | Description | Sensitivity | Lineage |
+|---|---|---|---|---|---|
+| `valid_time` | timestamp | UTC | Hour | Public | `bronze_openmeteo_prevruns` |
+| `lead_days` | int | days | 1 or 2 | Public | bronze |
+| `temperature_2m_w` ... `snowfall_w`, `temperature_2m_mean`, `n_cities`, the five city temperatures, `hdd_w`, `cdd_w` | as in `silver_weather_ontario_hourly` | | Values at that lead, null when a city is missing | Public | same weights |
+
+DQ checks (in `silver_dq_results`, only when the source exists): `unmatched_location` and
+`cities_per_hour` (FAIL), `physical_ranges` with `cloud_cover` allowed from -1 to 101 % (FAIL),
+`coverage` (WARN only: newest complete hour more than 2 days before the run date; `nb_forecast`
+then falls back to historical weather for the missing hours).
 
 ### `silver_sites`
 
@@ -763,7 +804,7 @@ so a report must filter one split at a time.
 | `actual_mw` | double | MW | Actual Ontario demand; null for live rows until IESO publishes the hour | Public | observed IESO demand (S1) |
 | `abs_error_mw` | double | MW | `abs(forecast_mw - actual_mw)`; null while `actual_mw` is null | Public | derived |
 | `ape_pct` | double | percent (0 to 100 scale) | `100 x abs_error_mw / actual_mw` | Public | derived |
-| `weather_source` | string | | `historical_forecast` (Open-Meteo Historical Forecast API, as-of forecasts) or `forecast_api` (Open-Meteo Forecast API, normally the live rows) | Public | silver weather tables |
+| `weather_source` | string | | Weather the row was scored with. `lead_matched` (backtest and holdout rows when `nb_forecast` runs with `train_weather = matched`, the default: Previous Runs weather at the production lead where covered, Historical Forecast weather before), `historical_forecast` (Historical Forecast API only: `train_weather = historical` or no Previous Runs table) or `forecast_api` (Open-Meteo Forecast API, normally the live rows) | Public | silver weather tables |
 
 ### `gold_forecast_eval`
 
@@ -790,8 +831,9 @@ Monthly evaluation, one row per month, split and model.
 | Source | Landing (`Files/`) | Bronze | Silver | Gold |
 |---|---|---|---|---|
 | S1 IESO CSV | `bronze/ieso/PUB_Demand_YYYY*.csv` | `bronze_ieso_demand` | `silver_demand_hourly` -> `silver_demand_weather_hourly` | `gold_demand_hourly` -> `gold_demand_daily`, `gold_demand_monthly`, `gold_top_peaks`, `gold_temp_sensitivity`, `gold_sensitivity_yearly`; actuals and naive in `gold_forecast` |
-| S2 Historical Forecast API | `bronze/openmeteo/YYYY-MM.json` | `bronze_openmeteo_hourly` | `silver_weather_city_hourly` -> `silver_weather_ontario_hourly` -> `silver_demand_weather_hourly` | weather columns of the demand facts; `gold_city_weather_daily`; features of `gold_forecast` (backtest, holdout) |
+| S2 Historical Forecast API | `bronze/openmeteo/YYYY-MM.json` | `bronze_openmeteo_hourly` | `silver_weather_city_hourly` -> `silver_weather_ontario_hourly` -> `silver_demand_weather_hourly` | weather columns of the demand facts; `gold_city_weather_daily`; features of `gold_forecast` (backtest, holdout: days T-1 and earlier, and day T where the Previous Runs data does not reach) |
 | S2 Forecast API | `bronze/openmeteo_forecast/YYYY-MM-DD.json` | `bronze_openmeteo_forecast` | `silver_weather_forecast_ontario` | features of `gold_forecast` (live) |
+| S2 Previous Runs API | `bronze/openmeteo_prevruns/YYYY-MM.json` | `bronze_openmeteo_prevruns` | `silver_weather_prevruns_ontario` | training features of the model; features of `gold_forecast` (backtest, holdout, `weather_source = lead_matched`) |
 | S3 Azure SQL | none (Copy activity writes tables) | `bronze_sites`, `bronze_customers`, `bronze_meters` | `silver_sites`, `silver_customers_pseudo`, `silver_meters` | `gold_dim_site`, `gold_dim_meter` |
 | S4 simulator | none (Eventstream `es_meters`) | | | Eventhouse `eh_gridpulse`, table `meter_readings` (not in the Lakehouse) |
 | `config.py` | | | | `gold_dim_city` |

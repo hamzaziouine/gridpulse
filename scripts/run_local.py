@@ -3,7 +3,8 @@
 What stands in for Fabric:
 - `spark`: a local SparkSession (JDK 17 in JAVA_HOME, see README);
 - `store`: LocalStore, Parquet tables under data/lakehouse/Tables (git-ignored);
-- `Files/bronze/ieso` and `Files/bronze/openmeteo`: the local downloads in data/raw;
+- `Files/bronze/ieso`, `Files/bronze/openmeteo` and `Files/bronze/openmeteo_prevruns`: the local
+  downloads in data/raw (scripts/pull_ieso.py, pull_openmeteo.py, pull_openmeteo_prevruns.py);
 - the pipeline's Azure SQL copy (bronze_sites/meters/customers): data/reference/*.csv, the same
   rows scripts/load_sql.py loads into Azure SQL;
 - Key Vault: the salt comes from $GRIDPULSE_HASH_SALT, else a random one kept in
@@ -78,7 +79,11 @@ def main(argv: list[str] | None = None) -> int:
         spark,
         root=a.lake / "Tables",
         files_root=a.lake / "Files",
-        aliases={"bronze/ieso": a.raw / "ieso", "bronze/openmeteo": a.raw / "openmeteo"},
+        aliases={
+            "bronze/ieso": a.raw / "ieso",
+            "bronze/openmeteo": a.raw / "openmeteo",
+            "bronze/openmeteo_prevruns": a.raw / "openmeteo_prevruns",
+        },
     )
     if "silver" in steps:  # the pipeline's SQL -> Lakehouse copy activity
         for t in reference.LOAD_ORDER:

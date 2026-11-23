@@ -18,6 +18,7 @@ POLICY = {"timeout": "0.02:00:00", "retry": 2, "retryIntervalInSeconds": 120,
 NB_POLICY = {"timeout": "0.02:00:00", "retry": 0, "retryIntervalInSeconds": 30,
              "secureOutput": False, "secureInput": False}  # fmt: skip
 OM_Q = "{{OPENMETEO_QUERY}}"
+PR_Q = "{{PREVRUNS_QUERY}}"
 RUN = "@variables('v_run_date')"
 
 
@@ -176,10 +177,18 @@ def daily() -> dict:
                   f"@concat('v1/forecast?{OM_Q}&forecast_days=3')",
                   "bronze/openmeteo_forecast", "@concat(variables('v_run_date'), '.json')",
                   "S2: Open-Meteo Forecast API, next 3 days, input of tomorrow's forecast."),
+        http_copy("cp_openmeteo_prevruns", [dep("set_month_start")], "{{CONN_OPENMETEO_PREV}}",
+                  f"@concat('v1/forecast?{PR_Q}&start_date=', variables('v_month_start'), "
+                  "'&end_date=', variables('v_data_day'))",
+                  "bronze/openmeteo_prevruns",
+                  "@concat(substring(variables('v_data_day'), 0, 7), '.json')",
+                  "S2: Open-Meteo Previous Runs API (forecast 1 and 2 days before each hour), "
+                  "yesterday's month up to yesterday. Training input of nb_forecast."),
         sql_foreach([dep("set_month_start")]),
         notebook("nb_bronze", "{{NB_BRONZE_ID}}",
                  [dep("cp_ieso_demand"), dep("cp_openmeteo_history"),
-                  dep("cp_openmeteo_forecast"), dep("fe_sql_reference")],
+                  dep("cp_openmeteo_forecast"), dep("cp_openmeteo_prevruns"),
+                  dep("fe_sql_reference")],
                  {"run_date": (expr(RUN), "string"), "full_refresh": (False, "bool")}),
         notebook("nb_silver", "{{NB_SILVER_ID}}", [dep("nb_bronze")],
                  {"run_date": (expr(RUN), "string")}),
@@ -217,6 +226,23 @@ def backfill() -> dict:
         f"@concat(formatDateTime({m0}, 'yyyy-MM'), '.json')",
         "One calendar month of the Historical Forecast API (capped at yesterday).",
     )
+    p0 = "addToTime(pipeline().parameters.prevruns_start_month, item(), 'Month')"
+    p_start = "pipeline().parameters.prevruns_start_month"
+    p_end = f"addDays(addToTime({p_start}, add(item(), 1), 'Month'), -1)"
+    p_end_capped = (
+        f"if(greater(ticks({p_end}), ticks({yday})), formatDateTime({yday}, 'yyyy-MM-dd'), "
+        f"formatDateTime({p_end}, 'yyyy-MM-dd'))"
+    )
+    prev = http_copy(
+        "cp_prevruns_month",
+        [],
+        "{{CONN_OPENMETEO_PREV}}",
+        f"@concat('v1/forecast?{PR_Q}&start_date=', formatDateTime({p0}, 'yyyy-MM-dd'), "
+        f"'&end_date=', {p_end_capped})",
+        "bronze/openmeteo_prevruns",
+        f"@concat(formatDateTime({p0}, 'yyyy-MM'), '.json')",
+        "One calendar month of the Previous Runs API (capped at yesterday).",
+    )
     ieso = http_copy(
         "cp_ieso_year",
         [],
@@ -237,27 +263,36 @@ def backfill() -> dict:
          "description": "S2: one request per month, sequential, far below Open-Meteo's limits.",
          "typeProperties": {"items": expr("@range(0, pipeline().parameters.month_count)"),
                             "isSequential": True, "activities": [om]}},
+        {"name": "fe_prevruns_months", "type": "ForEach", "dependsOn": [dep("set_run_date")],
+         "description": "S2: Previous Runs API, one request per month from prevruns_start_month "
+                        "(2024-01: full coverage of the 9 variables starts in 2024).",
+         "typeProperties": {"items": expr("@range(0, pipeline().parameters.prevruns_month_count)"),
+                            "isSequential": True, "activities": [prev]}},
         sql_foreach([dep("set_run_date")]),
         notebook("nb_bronze", "{{NB_BRONZE_ID}}",
-                 [dep("fe_ieso_years"), dep("fe_openmeteo_months"), dep("fe_sql_reference")],
+                 [dep("fe_ieso_years"), dep("fe_openmeteo_months"), dep("fe_prevruns_months"),
+                  dep("fe_sql_reference")],
                  {"run_date": (expr(RUN), "string"), "full_refresh": (True, "bool")}),
         notebook("nb_silver", "{{NB_SILVER_ID}}", [dep("nb_bronze")],
                  {"run_date": (expr(RUN), "string")}),
         notebook("nb_gold", "{{NB_GOLD_ID}}", [dep("nb_silver")],
                  {"run_date": (expr(RUN), "string")}),
         notebook("nb_forecast", "{{NB_FORECAST_ID}}", [dep("nb_gold")],
-                 {"run_date": (expr(RUN), "string")}),
+                 {"run_date": (expr(RUN), "string"), "train_weather": ("matched", "string")}),
         *failure_path("nb_forecast"),
     ]  # fmt: skip
     return {"properties": {
         "description": "GridPulse one-off backfill: every IESO year and Open-Meteo month since "
-                       "2019, full bronze refresh, silver, gold, then model training "
-                       "(nb_forecast). Safe to rerun.",
+                       "2019, Previous Runs months since 2024, full bronze refresh, silver, gold, "
+                       "then model training on lead-matched weather (nb_forecast). Safe to rerun.",
         "activities": acts,
         "parameters": {"first_year": {"type": "int", "defaultValue": 2019},
                        "year_count": {"type": "int", "defaultValue": "{{BACKFILL_YEARS}}"},
                        "start_month": {"type": "string", "defaultValue": "2019-01-01"},
-                       "month_count": {"type": "int", "defaultValue": "{{BACKFILL_MONTHS}}"}},
+                       "month_count": {"type": "int", "defaultValue": "{{BACKFILL_MONTHS}}"},
+                       "prevruns_start_month": {"type": "string", "defaultValue": "2024-01-01"},
+                       "prevruns_month_count": {"type": "int",
+                                                "defaultValue": "{{PREVRUNS_MONTHS}}"}},
         "variables": {"v_run_date": {"type": "String"}},
         "annotations": ["gridpulse", "backfill"],
     }}  # fmt: skip

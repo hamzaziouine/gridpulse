@@ -2,7 +2,8 @@
 
 6 EST days, 2025-04-28 to 2025-05-03, chosen because they contain IESO's real missing hour
 (2025-05-01 HE1). The IESO excerpt keeps the original header lines; the Open-Meteo excerpt keeps
-the original JSON layout (5 city objects with hourly arrays), split by month like the real files.
+the original JSON layout (5 city objects with hourly arrays), split by month like the real files;
+the same window is cut from the Previous Runs files (data/raw/openmeteo_prevruns).
 Short excerpts only (IESO licence: 7 days or less). Output: tests/fixtures/lake/.
 
     uv run python scripts/make_test_fixtures.py
@@ -30,19 +31,25 @@ def main() -> None:
     (OUT / "ieso" / src.name).write_text("\n".join(head + rows) + "\n", encoding="utf-8")
     print(f"ieso/{src.name}: {len(rows)} rows")
 
-    (OUT / "openmeteo").mkdir(parents=True, exist_ok=True)
+    for folder in ("openmeteo", "openmeteo_prevruns"):
+        cut_weather(folder)
+
+
+def cut_weather(folder: str) -> None:
+    (OUT / folder).mkdir(parents=True, exist_ok=True)
     for month in ("2025-04", "2025-05"):
-        payload = json.loads((RAW / "openmeteo" / f"{month}.json").read_text(encoding="utf-8"))
+        payload = json.loads((RAW / folder / f"{month}.json").read_text(encoding="utf-8"))
         cut = []
         for item in payload:
             times = item["hourly"]["time"]
             keep = [i for i, t in enumerate(times) if WX_FIRST <= t <= WX_LAST]
             hourly = {k: [v[i] for i in keep] for k, v in item["hourly"].items()}
             cut.append({**{k: v for k, v in item.items() if k != "hourly"}, "hourly": hourly})
-        (OUT / "openmeteo" / f"{month}.json").write_text(
+        (OUT / folder / f"{month}.json").write_text(
             json.dumps(cut, separators=(",", ":")), encoding="utf-8"
         )
-        print(f"openmeteo/{month}.json: {len(cut[0]['hourly']['time'])} hours x {len(cut)} cities")
+        n = len(cut[0]["hourly"]["time"])
+        print(f"{folder}/{month}.json: {n} hours x {len(cut)} cities")
 
 
 if __name__ == "__main__":

@@ -24,10 +24,12 @@ from gridpulse.config import CITIES, VARIABLES
 
 HISTORICAL_URL = "https://historical-forecast-api.open-meteo.com/v1/forecast"
 # Previous Runs API: the same model's forecast as issued about N days before each valid hour
-# (variables with the suffix `_previous_dayN`). Used only for the lead-matched backtest
-# (scripts/backtest_weather_lead.py); full coverage for gfs_seamless starts in January 2024.
+# (variables with the suffix `_previous_dayN`). Training input of nb_forecast (lead-matched
+# weather) and of scripts/backtest_weather_lead.py. For gfs_seamless, 8 of the 9 variables start
+# 2024-01-19 and snowfall 2024-12-06 (temperature alone goes back to 2021, not pulled).
 PREVRUNS_URL = "https://previous-runs-api.open-meteo.com/v1/forecast"
 PREVIOUS_DAYS = (1, 2)
+PREVRUNS_FIRST_MONTH = date(2024, 1, 1)
 MODEL = "gfs_seamless"
 
 
@@ -45,9 +47,16 @@ def month_params(first: date, last: date) -> dict[str, str]:
     return base_params() | {"start_date": first.isoformat(), "end_date": last.isoformat()}
 
 
-def prevruns_params(first: date, last: date, days: Sequence[int] = PREVIOUS_DAYS) -> dict[str, str]:
+def prevruns_base_params(days: Sequence[int] = PREVIOUS_DAYS) -> dict[str, str]:
     hourly = ",".join(f"{v}_previous_day{d}" for d in days for v in VARIABLES)
-    return month_params(first, last) | {"hourly": hourly}
+    return base_params() | {"hourly": hourly}
+
+
+def prevruns_params(first: date, last: date, days: Sequence[int] = PREVIOUS_DAYS) -> dict[str, str]:
+    return prevruns_base_params(days) | {
+        "start_date": first.isoformat(),
+        "end_date": last.isoformat(),
+    }
 
 
 def request_weight(n_locations: int, n_variables: int, n_days: float) -> float:

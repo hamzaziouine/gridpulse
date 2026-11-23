@@ -32,6 +32,10 @@ RANGES = {
     "precipitation": (0.0, 200.0),
     "snowfall": (0.0, 100.0),
 }
+# The Previous Runs API returns cloud_cover 101 % (62 city-hours) and -1 % (10 city-hours) for
+# some day-2 hours of 2024-01..2026-11 (1 of them in the test fixture): kept as delivered (a tree
+# model does not care about 1 %), the check only allows that one extra percent on each side.
+PREVRUNS_RANGES = RANGES | {"cloud_cover": (-1.0, 101.0)}
 FRESHNESS_WARN_DAYS, FRESHNESS_FAIL_DAYS = 2, 4
 WEATHER_TAIL_HOURS = 72  # demand hours newer than this may still wait for weather
 
@@ -153,6 +157,61 @@ def check_weather(bronze_om: DataFrame, silver_city: DataFrame) -> list[CheckRes
     n_bad = sum(bad.values())
     out.append(_r(t, "physical_ranges", n_bad == 0, n_bad, "all values in physical ranges",
                   ", ".join(f"{k}={v}" for k, v in bad.items() if v)))  # fmt: skip
+    return out
+
+
+def check_prevruns(
+    bronze_prev: DataFrame, prev_city: DataFrame, prev_ont: DataFrame, run_date: date
+) -> list[CheckResult]:
+    """Previous Runs weather (training input only). Structure problems fail the run; missing
+    coverage only warns, because nb_forecast falls back to the historical weather."""
+    t = "silver_weather_prevruns_ontario"
+    unmatched = bronze_prev.where(F.col("city_key").isNull()).count()
+    out = [_r("bronze_openmeteo_prevruns", "unmatched_location", unmatched == 0, unmatched, "0",
+              "grid point matched no configured city")]  # fmt: skip
+    incomplete = (
+        prev_city.groupBy("valid_time", "lead_days")
+        .count()
+        .where(F.col("count") != len(CITIES))
+        .count()
+    )
+    out.append(_r(t, "cities_per_hour", incomplete == 0, incomplete,
+                  f"{len(CITIES)} cities every hour and lead"))  # fmt: skip
+    range_exprs = [
+        F.sum((~F.col(v).between(lo, hi)).cast("int")).alias(f"rng_{v}")
+        for v, (lo, hi) in PREVRUNS_RANGES.items()
+    ]
+    row = prev_city.agg(*range_exprs).first()
+    bad = {v: row[f"rng_{v}"] or 0 for v in PREVRUNS_RANGES}
+    n_bad = sum(bad.values())
+    out.append(_r(t, "physical_ranges", n_bad == 0, n_bad, "all values in physical ranges",
+                  ", ".join(f"{k}={v}" for k, v in bad.items() if v)))  # fmt: skip
+    full = F.lit(True)
+    for v in VARIABLES:
+        full = full & F.col(f"{v}_w").isNotNull()
+    cov = (
+        prev_ont.where(full)
+        .groupBy("lead_days")
+        .agg(
+            F.min(F.unix_seconds("valid_time")).alias("first_s"),
+            F.max(F.unix_seconds("valid_time")).alias("last_s"),
+            F.count("*").alias("hours"),
+        )
+        .orderBy("lead_days")
+        .collect()
+    )
+    run_s = datetime(run_date.year, run_date.month, run_date.day, tzinfo=UTC).timestamp()
+    lag = min(((run_s - r["last_s"]) / 86400 for r in cov), default=None)
+    details = "; ".join(
+        f"day{r['lead_days']}: {r['hours']} complete hours "
+        f"{datetime.fromtimestamp(r['first_s'], UTC):%Y-%m-%d %H}Z.."
+        f"{datetime.fromtimestamp(r['last_s'], UTC):%Y-%m-%d %H}Z"
+        for r in cov
+    )
+    ok = lag is not None and lag <= FRESHNESS_WARN_DAYS
+    out.append(_r(t, "coverage", ok, None if lag is None else round(lag, 2),
+                  f"all {len(VARIABLES)} variables, newest <= {FRESHNESS_WARN_DAYS} days old",
+                  details or "no complete hour", warn=True))  # fmt: skip
     return out
 
 

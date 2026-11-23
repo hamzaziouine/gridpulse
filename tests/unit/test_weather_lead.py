@@ -95,3 +95,55 @@ def test_matched_policy_switches_to_day2_after_he17_and_falls_back_on_gaps() -> 
     assert np.allclose(lead.loc[gap, "snowfall_w"], hist.loc[gap, "snowfall_w"])
     with pytest.raises(ValueError):
         wl.lead_weather(hist, d1, d2, "day3")
+
+
+def silver_prevruns(d1: pd.DataFrame, d2: pd.DataFrame) -> pd.DataFrame:
+    """Long frame shaped like silver_weather_prevruns_ontario (naive UTC times, as toPandas()
+    returns them with the session time zone set to UTC)."""
+    parts = [d.assign(lead_days=k, n_cities=5) for k, d in ((1, d1), (2, d2))]
+    out = pd.concat(parts, ignore_index=True).sample(frac=1.0, random_state=3)
+    out["valid_time"] = pd.to_datetime(out["valid_time"], utc=True).dt.tz_localize(None)
+    return out
+
+
+def test_training_without_previous_runs_falls_back_to_historical_features() -> None:
+    hist = synthetic(days=30)
+    empty = silver_prevruns(shifted(hist, 1.0), shifted(hist, 1.0)).iloc[:0]
+    got, info = wl.matched_training_features(hist, empty)
+    ref = fx.build_features(hist)
+    cols = list(fx.FEATURE_COLUMNS)
+    assert got["target_time"].equals(ref["target_time"])
+    np.testing.assert_allclose(
+        got[cols].to_numpy(dtype=float), ref[cols].to_numpy(dtype=float), rtol=1e-9, atol=1e-9
+    )
+    assert info["hours_full_lead"] == 0 and info["first_full_lead_day"] == ""
+
+
+def test_training_uses_matched_lead_where_covered_and_history_before() -> None:
+    hist = synthetic(days=30)
+    d1, d2 = shifted(hist, 2.0), shifted(hist, -3.0)
+    t = pd.to_datetime(d1["valid_time"], utc=True)
+    start = pd.Timestamp("2025-01-15 05:00", tz="UTC")  # HE1 of 2025-01-15 EST
+    d1, d2 = d1[t >= start], d2[t >= start]
+    d2 = d2.copy()
+    d2.loc[d2.index[:30], "snowfall_w"] = np.nan  # one column missing for a while
+    got, info = wl.matched_training_features(hist, silver_prevruns(d1, d2))
+    ref_lead, _ = wl.lead_weather(hist, d1, d2, "matched")
+    ref = wl.lead_features(hist, ref_lead)
+    cols = list(fx.FEATURE_COLUMNS)
+    np.testing.assert_allclose(
+        got[cols].to_numpy(dtype=float), ref[cols].to_numpy(dtype=float), rtol=1e-9, atol=1e-9
+    )
+    before = got["est_date"] < date(2025, 1, 15)
+    hist_feats = fx.build_features(hist)
+    np.testing.assert_allclose(
+        got.loc[before, "temperature_2m_w"], hist_feats.loc[before, "temperature_2m_w"]
+    )
+    after = got["est_date"] >= date(2025, 1, 16)
+    assert not np.allclose(
+        got.loc[after, "temperature_2m_w"], hist_feats.loc[after, "temperature_2m_w"]
+    )
+    # snowfall gap: the historical value is kept, the day is not counted as fully covered
+    assert info["first_full_lead_day"] == "2025-01-16"
+    assert info["policy"] == "matched"
+    assert 0 < info["hours_full_lead"] < info["hours_total"]

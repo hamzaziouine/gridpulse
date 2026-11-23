@@ -26,7 +26,9 @@
 # 1. Demand: IESO hour-ending (fixed EST, no daylight saving) becomes `target_time`, the UTC start
 #    of the hour; when a revised file and an older one both hold an hour, the newest file wins.
 # 2. Weather: one row per city and hour, then population-weighted Ontario aggregates with heating
-#    and cooling degree hours (base 18 C), joined to demand on the same UTC hour.
+#    and cooling degree hours (base 18 C), joined to demand on the same UTC hour. The Previous
+#    Runs weather (forecast 1 and 2 days ahead) gets the same aggregates per lead, complete hours
+#    only, in `silver_weather_prevruns_ontario` (training input of nb_forecast).
 # 3. Reference data from Azure SQL: customer PII is replaced by a salted SHA-256 hash (salt read
 #    from Key Vault), so no silver or gold table holds a name, email, phone or address.
 # 4. Quality gate: every check is written to `silver_dq_results`. If one FAILS, the notebook
@@ -106,6 +108,13 @@ fc = None
 if store.exists("bronze_openmeteo_forecast"):
     fc = silver.weather_forecast_ontario(store.read("bronze_openmeteo_forecast"), cities)
 
+# Previous Runs weather (training input of nb_forecast), when the source has landed.
+b_prev = prev_city = prev_ont = None
+if store.exists("bronze_openmeteo_prevruns"):
+    b_prev = store.read("bronze_openmeteo_prevruns")
+    prev_city = silver.weather_prevruns_city(b_prev).cache()
+    prev_ont = silver.weather_prevruns_ontario(prev_city, cities).cache()
+
 # METADATA ********************
 
 # META {
@@ -123,6 +132,8 @@ results = (
     + quality.check_join(demand_wx)
     + quality.check_reference(s_sites, b_meters, b_customers, s_customers, s_meters)
 )
+if prev_ont is not None:
+    results += quality.check_prevruns(b_prev, prev_city, prev_ont, RUN_DATE)
 dq = quality.results_frame(spark, results, RUN_ID, RUN_DATE, datetime.now(UTC))
 store.write(dq, "silver_dq_results", replace={"run_date": [RUN_DATE]})
 display(dq.select("table_name", "check_name", "status", "observed", "expected", "details"))
@@ -154,5 +165,9 @@ written = {
 }
 if fc is not None:
     written["silver_weather_forecast_ontario"] = store.write(fc, "silver_weather_forecast_ontario")
+if prev_ont is not None:
+    written["silver_weather_prevruns_ontario"] = store.write(
+        prev_ont, "silver_weather_prevruns_ontario"
+    )
 for name, n in written.items():
     print(f"{name}: {n:,} rows")

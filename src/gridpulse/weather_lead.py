@@ -1,4 +1,5 @@
-"""Lead-matched weather for an honest day-ahead backtest (review finding 3, 2026-11-23).
+"""Lead-matched weather: honest day-ahead backtest (review finding 3) and, since 2026-11-23,
+the default training input of nb_forecast (`matched_training_features`).
 
 Training and the standard backtest use the Open-Meteo Historical Forecast API, which keeps the
 newest model run for each hour (lead of a few hours). In production nb_predict scores day T with
@@ -137,3 +138,47 @@ def lead_features(hist: pd.DataFrame, lead: pd.DataFrame) -> pd.DataFrame:
     out["temp_w_change48"] = out["temperature_2m_w"].to_numpy() - out["temp_w_lag48"].to_numpy()
     out["est_date"] = est.to_numpy()
     return out
+
+
+def split_leads(prev: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """silver_weather_prevruns_ontario rows (`valid_time`, `lead_days`, weather columns) ->
+    (day1, day2) frames for `lead_weather`, one row per UTC hour, tz-aware valid_time."""
+    out = []
+    for d in (1, 2):
+        part = prev[prev["lead_days"] == d].copy()
+        part["valid_time"] = pd.to_datetime(part["valid_time"], utc=True)
+        part = part.sort_values("valid_time").drop_duplicates("valid_time", keep="last")
+        cols = ["valid_time", *(c for c in WEATHER_COLUMNS if c in part.columns)]
+        out.append(part[cols].reset_index(drop=True))
+    return out[0], out[1]
+
+
+def matched_training_features(
+    hist: pd.DataFrame, prev: pd.DataFrame, policy: str = "matched"
+) -> tuple[pd.DataFrame, dict]:
+    """Production training input: features of every hour as nb_predict builds them live, with
+    the weather of day T at the lead the daily forecast really has (`policy`, default matched:
+    HE1..HE17 forecast 1 day ahead, HE18..HE24 2 days ahead).
+
+    Fallback: column by column, an hour without a complete Previous Runs value keeps the
+    historical (short-lead) weather. With the gfs_seamless coverage that means: before
+    2024-01-19 every variable is historical except temperature (pulled from 2024-01, so also
+    historical before that), 2024-01-19 to 2024-12-06 snowfall is historical, after that every
+    variable has the matched lead. Without any Previous Runs row the result equals
+    `build_features(hist)` (up to float rounding of the 24 h mean).
+
+    Returns the features and a small coverage summary for logging."""
+    d1, d2 = split_leads(prev)
+    lead, complete = lead_weather(hist, d1, d2, policy)
+    feats = lead_features(hist, lead)
+    est = (pd.to_datetime(hist["target_time"], utc=True) - EST_SHIFT).dt.date
+    full_days = complete.groupby(est.to_numpy()).agg(["all", "size"])
+    full = full_days.index[full_days["all"] & (full_days["size"] == 24)]
+    info = {
+        "policy": policy,
+        "hours_full_lead": int(complete.sum()),
+        "hours_total": int(len(complete)),
+        "first_full_lead_day": str(min(full)) if len(full) else "",
+        "last_full_lead_day": str(max(full)) if len(full) else "",
+    }
+    return feats, info

@@ -9,6 +9,9 @@
 - `silver_demand_weather_hourly`: demand joined with the Ontario weather of the same hour.
 - `silver_weather_forecast_ontario`: same aggregates from the Forecast API files (next days),
   newest issue per hour, used by the daily scoring notebook.
+- `silver_weather_prevruns_ontario`: same aggregates per (hour, lead_days) from the Previous Runs
+  API (forecast 1 or 2 days before the hour), used by nb_forecast to train on weather of the lead
+  the daily forecast really has. An aggregate is null unless all five cities have the value.
 - Reference data from Azure SQL: `silver_sites`, `silver_meters`, `silver_customers_pseudo`.
   Customer PII (name, email, phone, street address, postal code) and the raw customer_id do not
   reach silver: a salted SHA-256 `customer_hash` replaces them (DESIGN D18).
@@ -111,6 +114,55 @@ def weather_forecast_ontario(bronze_fc: DataFrame, cities: DataFrame) -> DataFra
     latest = with_issue.groupBy("valid_time").agg(F.max("issued_on").alias("issued_on"))
     newest = with_issue.join(latest, ["valid_time", "issued_on"])
     return weather_ontario(newest, cities, ("valid_time", "issued_on"))
+
+
+def weather_prevruns_city(bronze_prev: DataFrame) -> DataFrame:
+    """bronze_openmeteo_prevruns -> one row per (valid_time, lead_days, city_key), newest
+    ingestion wins (the daily run re-copies the current month)."""
+    newest_first = Window.partitionBy("valid_time", "lead_days", "city_key").orderBy(
+        F.col("ingested_at").desc(), F.col("source_file").desc()
+    )
+    return (
+        bronze_prev.where(F.col("city_key").isNotNull())
+        .withColumn("_rn", F.row_number().over(newest_first))
+        .where(F.col("_rn") == 1)
+        .select("valid_time", "lead_days", "city_key", *VARIABLES, "source_file")
+    )
+
+
+def weather_prevruns_ontario(prev_city: DataFrame, cities: DataFrame) -> DataFrame:
+    """Ontario aggregates per (valid_time, lead_days). Unlike `weather_ontario` (which
+    renormalises over the cities present), an aggregate is null unless every configured city has
+    the value: before the Previous Runs coverage starts most variables are null, and a partial
+    aggregate would be a different quantity. nb_forecast then keeps the historical value."""
+    n = len(CITIES)
+    w = cities.select("city_key", "population_weight")
+    joined = prev_city.join(F.broadcast(w), "city_key")
+
+    def complete(col: str, value):
+        return F.when(F.count(col) == n, value)
+
+    aggs = [
+        complete(
+            v, F.sum(F.col(v) * F.col("population_weight")) / F.sum("population_weight")
+        ).alias(f"{v}_w")
+        for v in VARIABLES
+    ]
+    aggs += [
+        complete("temperature_2m", F.avg("temperature_2m")).alias("temperature_2m_mean"),
+        F.count("*").alias("n_cities"),
+    ]
+    aggs += [
+        F.max(F.when(F.col("city_key") == c.key, F.col("temperature_2m"))).alias(
+            f"temperature_2m_{c.key}"
+        )
+        for c in CITIES
+    ]
+    out = joined.groupBy("valid_time", "lead_days").agg(*aggs)
+    tw = F.col("temperature_2m_w")  # greatest() skips nulls, so guard: no temperature, no HDD
+    return out.withColumn(
+        "hdd_w", F.when(tw.isNotNull(), F.greatest(F.lit(0.0), F.lit(BASE_TEMP_C) - tw))
+    ).withColumn("cdd_w", F.when(tw.isNotNull(), F.greatest(F.lit(0.0), tw - F.lit(BASE_TEMP_C))))
 
 
 def demand_weather_hourly(demand: DataFrame, weather_ont: DataFrame) -> DataFrame:

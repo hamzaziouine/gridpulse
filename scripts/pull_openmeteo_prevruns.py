@@ -2,9 +2,10 @@
 
 Same 5 cities, 9 variables and model (gfs_seamless) as scripts/pull_openmeteo.py, but each value
 is the forecast issued about one day (`_previous_day1`) or two days (`_previous_day2`) before
-its valid hour. Used by scripts/backtest_weather_lead.py to score the model with weather of the
-lead it gets in production. Coverage for all 9 variables starts in January 2024 (only
-temperature_2m goes back to 2021, which is not enough for the model's inputs).
+its valid hour. Local stand-in for the pipeline's Previous Runs copy activities (nb_forecast
+trains on it, scripts/backtest_weather_lead.py scores with it). Coverage for all 9 variables
+starts in 2024 (only temperature_2m goes back to 2021, which is not enough for the model's
+inputs), hence the default start, the same as the backfill pipeline.
 
 One JSON file per month (`YYYY-MM.json`), resumable like the historical pull. Network: only
 previous-runs-api.open-meteo.com.
@@ -40,7 +41,7 @@ def get(cl: httpx.Client, params: dict[str, str]) -> object:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--start", type=date.fromisoformat, default=date(2024, 1, 1))
+    ap.add_argument("--start", type=date.fromisoformat, default=om.PREVRUNS_FIRST_MONTH)
     ap.add_argument("--end", type=date.fromisoformat, default=date(2026, 11, 6))
     a = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
