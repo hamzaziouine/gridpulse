@@ -16,6 +16,7 @@ from pyspark.sql import types as T
 
 from gridpulse.config import CITIES, VARIABLES
 from gridpulse.medallion.silver import PII_COLUMNS, valid_demand_rows
+from gridpulse.timeutil import est_date
 
 # Hours IESO never published (Market Renewal go-live, PUB_Demand_2025 has no 2025-05-01 HE1).
 KNOWN_DEMAND_GAPS: frozenset[datetime] = frozenset({datetime(2025, 5, 1, 5, tzinfo=UTC)})
@@ -114,7 +115,7 @@ def check_demand(bronze: DataFrame, silver: DataFrame, run_date: date) -> list[C
         (F.col("count") != 24) & (F.col("est_date") < stats["dmax"])
     )
     short_days = [r["est_date"] for r in per_day.orderBy("est_date").collect()]
-    known_days = {g.astimezone(UTC).date() for g in KNOWN_DEMAND_GAPS}
+    known_days = {est_date(g) for g in KNOWN_DEMAND_GAPS}  # the EST day, not the UTC date
     out.append(_r(t, "hours_per_day_24", not short_days, len(short_days),
                   "24 hours per EST day", ", ".join(map(str, short_days[:5])),
                   warn=set(short_days) <= known_days))  # fmt: skip

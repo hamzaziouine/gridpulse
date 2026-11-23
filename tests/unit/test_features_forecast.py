@@ -149,3 +149,28 @@ def test_live_frame_without_weather_for_tomorrow_refuses() -> None:
     history = hist[pd.to_datetime(hist["target_time"], utc=True) < day_start]
     with pytest.raises(ValueError, match="no weather"):
         fx.live_frame(history, None, date(2025, 2, 5))
+
+
+def test_live_frame_fills_history_gap_before_day_t_minus_1_from_the_forecast() -> None:
+    """Daily pipeline reality: the history file ends at yesterday 23:00Z (its end_date is the UTC
+    date run_date - 1) and today's forecast file starts at today 00:00Z. The five hours between
+    today 00:00Z and HE1 of T-1 (05:00Z) are HE20..HE24 of day T-2: they feed temp_w_lag48 of
+    target hours HE20..HE24, so they must come from the forecast file, not stay empty."""
+    hist = synthetic(days=40)
+    t = pd.to_datetime(hist["target_time"], utc=True)
+    target = date(2025, 2, 5)
+    run_midnight = pd.Timestamp("2025-02-04 00:00", tz="UTC")  # run_date 00:00Z
+    day_start = pd.Timestamp("2025-02-05 05:00", tz="UTC")
+    # as in nb_predict: demand complete to day T-2, weather history to yesterday 23:00Z
+    demand = hist.loc[t < day_start - pd.Timedelta(hours=24), ["target_time", "ontario_demand_mw"]]
+    weather = hist[t < run_midnight].drop(columns=["ontario_demand_mw"])
+    history = weather.merge(demand, on="target_time", how="outer")
+    fcw = hist[(t >= run_midnight) & (t < run_midnight + pd.Timedelta(days=3))]
+    fcw = fcw.drop(columns=["ontario_demand_mw"]).rename(columns={"target_time": "valid_time"})
+    frame, source = fx.live_frame(history, fcw, target)
+    assert source == "forecast_api"
+    f = fx.build_features(frame, target_days=[target])
+    assert f[list(fx.FEATURE_COLUMNS)].notna().all().all()
+    # and it equals what the full series gives: the forecast rows are the same synthetic weather
+    full = fx.build_features(hist, target_days=[target])
+    pd.testing.assert_frame_equal(f[list(fx.FEATURE_COLUMNS)], full[list(fx.FEATURE_COLUMNS)])

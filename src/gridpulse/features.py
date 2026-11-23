@@ -144,7 +144,8 @@ def live_frame(
     `history`: silver_demand_weather_hourly rows (demand known up to T-2, weather from the
     Historical Forecast API). `forecast_weather`: silver_weather_forecast_ontario rows
     (valid_time + weather columns) from today's Forecast API file, or None. Forecast weather wins
-    for every hour it covers from the start of day T-1; the target day's hours get NaN demand.
+    for every hour it covers from the start of day T-1 and fills earlier hours that have no
+    historical weather yet; the target day's hours get NaN demand.
     Returns the frame and the weather source of the target day.
     """
     day_start = pd.Timestamp(target_day).tz_localize("UTC") + EST_SHIFT  # HE1 of T, in UTC
@@ -160,7 +161,13 @@ def live_frame(
         fw["valid_time"] = pd.to_datetime(fw["valid_time"], utc=True)
         fw = fw.set_index("valid_time").sort_index()
         fw = fw[~fw.index.duplicated(keep="last")]
-        use = fw.index[(fw.index >= day_start - pd.Timedelta(hours=24)) & fw.index.isin(hours)]
+        # The history file of the daily pipeline ends at yesterday 23:00Z while day T-1 starts at
+        # 05:00Z today: the forecast file also fills any earlier hour the history does not have
+        # (HE20..HE24 of day T-2, read by temp_w_lag48 of target hours HE20..HE24).
+        in_frame = fw.index[fw.index.isin(hours)]
+        no_history = frame.index[frame["temperature_2m_w"].isna()]
+        from_t1 = in_frame >= day_start - pd.Timedelta(hours=24)
+        use = in_frame[from_t1 | in_frame.isin(no_history)]
         cols = [c for c in WEATHER_COLUMNS if c in fw.columns]
         frame.loc[use, cols] = fw.loc[use, cols].to_numpy()
         target_hours = hours[hours >= day_start]

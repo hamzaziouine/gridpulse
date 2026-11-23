@@ -114,7 +114,13 @@ demand["target_time"] = pd.to_datetime(demand["target_time"], utc=True)
 hist = weather.merge(demand.drop(columns=["est_date"]), on="target_time", how="outer")
 fcw = None
 if store.exists("silver_weather_forecast_ontario"):
-    fcw = store.read("silver_weather_forecast_ontario").toPandas()
+    # Only forecasts issued up to the issue day: a rerun for a past run_date must not score with
+    # a forecast issued later (it falls back to historical weather, flagged in weather_source).
+    fcw = (
+        store.read("silver_weather_forecast_ontario")
+        .where(F.col("issued_on") <= F.lit(RUN_DATE))
+        .toPandas()
+    )
 frame, weather_source = fx.live_frame(hist, fcw, TARGET_DAY)
 feats = fx.build_features(frame, target_days=[TARGET_DAY])
 print(f"{len(feats)} target hours, weather from {weather_source}, demand known to {newest_full}")
