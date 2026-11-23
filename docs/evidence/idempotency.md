@@ -4,11 +4,11 @@ Success criterion 1 of the proposal: the pipeline runs end to end twice with no 
 
 ## 1. Runs
 
-| Run | Pipeline | Job instance id | Start (UTC) | End (UTC) | Parameters | Status |
+| Run | Pipeline | Job instance id (first 8 characters) | Start (UTC) | End (UTC) | Parameters | Status |
 |---|---|---|---|---|---|---|
-| backfill | `pl_backfill` | `e95b3701-8361-4b51-9aa0-b16eb1b38ddf` | 2026-11-23 20:41:32 | 2026-11-23 21:45:06 | defaults (2019-01 to 2026-11) | Completed |
-| run 1 | `pl_daily_ingest` | `55454d4a-da0b-4435-9e9b-33b5cd0e4c19` | 2026-11-23 22:13:07 | 2026-11-23 22:36:52 | `run_date = 2026-11-23` | Completed |
-| run 2 | `pl_daily_ingest` | `2e39a2de-4772-4637-a603-80646075d799` | 2026-11-23 22:38:42 | 2026-11-23 23:03:16 | `run_date = 2026-11-23` | Completed |
+| backfill | `pl_backfill` | `e95b3701` | 2026-11-23 20:41:32 | 2026-11-23 21:45:06 | defaults (2019-01 to 2026-11) | Completed |
+| run 1 | `pl_daily_ingest` | `55454d4a` | 2026-11-23 22:13:07 | 2026-11-23 22:36:52 | `run_date = 2026-11-23` | Completed |
+| run 2 | `pl_daily_ingest` | `2e39a2de` | 2026-11-23 22:38:42 | 2026-11-23 23:03:16 | `run_date = 2026-11-23` | Completed |
 
 Both daily runs were started by hand with `fab job start ws_gridpulse.Workspace/pl_daily_ingest.DataPipeline -P run_date:string=2026-11-23`. The run date was pinned so that both runs load exactly the same source files. Start and end times come from `fab job run-list`.
 

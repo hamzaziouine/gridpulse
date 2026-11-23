@@ -1,6 +1,6 @@
 # Fabric batch path: deployment and run evidence (2026-11-23)
 
-What exists in Fabric and what the batch runs did, as read back on 2026-11-23 with `fab` and the Fabric REST API, signed in as Hamza. Idempotency counts are in `docs/evidence/idempotency.md`.
+What exists in Fabric and what the batch runs did, as read back on 2026-11-23 with `fab` and the Fabric REST API, signed in as Hamza. Idempotency counts are in `docs/evidence/idempotency.md`. Job and run ids are shortened to their first 8 characters.
 
 ## 1. Capacity
 
@@ -36,7 +36,7 @@ One schedule on `pl_daily_ingest` (`fab job run-list ... --schedule`): enabled, 
 
 ## 4. Backfill run (`pl_backfill`)
 
-Job `e95b3701-8361-4b51-9aa0-b16eb1b38ddf`, 2026-11-23 20:41:32 to 21:45:06 UTC (63.5 min), Completed, every activity Succeeded with no retry.
+Job `e95b3701`, 2026-11-23 20:41:32 to 21:45:06 UTC (63.5 min), Completed, every activity Succeeded with no retry.
 
 | Activity | Start (UTC) | End (UTC) | Duration |
 |---|---|---|---|
@@ -53,7 +53,7 @@ The four ForEach loops run in parallel, so the copy phase took 28.5 min, set by 
 
 ## 5. Daily run (`pl_daily_ingest`, run 2)
 
-Job `2e39a2de-4772-4637-a603-80646075d799`, `run_date` 2026-11-23, 22:38:42 to 23:03:16 UTC (about 25 min), Completed, 15 of 15 activity runs Succeeded.
+Job `2e39a2de`, `run_date` 2026-11-23, 22:38:42 to 23:03:16 UTC (about 25 min), Completed, 15 of 15 activity runs Succeeded.
 
 | Activity | Start (UTC) | End (UTC) | Duration |
 |---|---|---|---|
@@ -67,11 +67,11 @@ Job `2e39a2de-4772-4637-a603-80646075d799`, `run_date` 2026-11-23, 22:38:42 to 2
 | `nb_gold` | 22:53:12 | 22:58:50 | 338 s |
 | `nb_predict` | 22:58:51 | 23:03:14 | 263 s |
 
-Run 1 (`55454d4a-da0b-4435-9e9b-33b5cd0e4c19`) took about 24 min. Most of a daily run is notebook time; the copies take under 1.5 min.
+Run 1 (`55454d4a`) took about 24 min. Most of a daily run is notebook time; the copies take under 1.5 min.
 
 ## 6. Data quality in Fabric
 
-`silver_dq_results` after run 2 (run id `c33c7145-d228-4a77-b09d-da9e35837613`): 21 checks, **18 PASS, 3 WARN, 0 FAIL**. The backfill and run 1 gave the same 21 results.
+`silver_dq_results` after run 2 (run id `c33c7145`): 21 checks, **18 PASS, 3 WARN, 0 FAIL**. The backfill and run 1 gave the same 21 results.
 
 | Table | Check | Status | Observed | Details |
 |---|---|---|---|---|
