@@ -74,3 +74,15 @@ def test_seed_sql_matches_the_csvs() -> None:
     seed = (ROOT / "sql" / "002_seed.sql").read_text("utf-8")
     for table, n in load_sql.EXPECTED.items():
         assert seed.count(f"INSERT INTO dbo.{table} ") == n
+
+
+def test_connection_string_uses_only_keywords_the_driver_accepts() -> None:
+    # mssql-python validates keywords against an allowlist; "Connection Timeout" was rejected on
+    # the first real Azure run (11-23), so both auth variants go through the driver's own parser.
+    parser_mod = pytest.importorskip("mssql_python.connection_string_parser")
+    parser = parser_mod._ConnectionStringParser(validate_keywords=True)
+    for cs in (
+        load_sql.azure_connection_string("s.database.windows.net", "db", None, None, entra=True),
+        load_sql.azure_connection_string("s.database.windows.net", "db", "u", "p", entra=False),
+    ):
+        parser._parse(cs)

@@ -1,33 +1,33 @@
 # Resource inventory and cleanup (deliverable 7)
 
-Planned Azure and Fabric resources of GridPulse, with region, size, cost estimate, how each one gets created, its status, and how it gets removed. Status as of 2026-11-22: only the resource group `rg-hz2611-cdda` and the budget `budget-cdda-20usd` exist (both created on 2026-11-06 under Nacir's account). Everything else is "not created yet".
+Planned Azure and Fabric resources of GridPulse, with region, size, cost estimate, how each one gets created, its status, and how it gets removed. Status as of 2026-11-23: the Azure foundation is deployed (Key Vault, two secrets, SQL server, firewall, free-offer database with the reference rows, two tag policies), all under Nacir's account. Evidence: `docs/evidence/azure_foundation.md`. Nothing exists in Fabric yet.
 
 Cost estimates come from DESIGN section 3. Subscription: "Azure for Students" (owner Mohamed NACIR; the subscription and tenant ids are kept in the git-ignored `infra/local.settings.json`). Tags on every Azure resource: `project=cdda-gridpulse`, `owner=hamza.ziouine`, `course=CDDA-2627`.
 
 ## Azure (resource group `rg-hz2611-cdda`)
 
-| Name | Type | Region | SKU / capacity | Monthly cost estimate | Created by | Status 2026-11-22 | Cleanup action |
+| Name | Type | Region | SKU / capacity | Monthly cost estimate | Created by | Status 2026-11-23 | Cleanup action |
 |---|---|---|---|---|---|---|---|
 | `rg-hz2611-cdda` | Resource group | germanywestcentral | n/a | $0 | created 2026-11-06 under Nacir's account | exists | deleted by `infra/azure/cleanup.ps1` (with everything in it) |
 | `budget-cdda-20usd` | Cost Management budget (RG scope) | n/a | $20 per month, 2026-11-01 to 2027-03-31; mails at 50 % and 100 % actual, 100 % forecast, to Hamza and Nacir | $0 | created 2026-11-06 under Nacir's account | exists (spend 0.00 USD on 2026-11-06) | deleted with the RG |
-| `kv-hz2611-cdda` | Key Vault | germanywestcentral | Standard (default), RBAC authorization, soft delete 7 days, purge protection off | under $0.10 (a few hundred operations) | `infra/azure/deploy.ps1` | not created yet | deleted with the RG, then purged by `cleanup.ps1` |
-| `sql-gpadmin-password` | Key Vault secret | (in the vault) | generated, 28 characters | included above | `deploy.ps1` | not created yet | removed with the vault |
-| `customer-hash-salt` | Key Vault secret | (in the vault) | 32 random bytes (hex), kept on reruns | included above | `deploy.ps1` | not created yet | removed with the vault |
+| `kv-hz2611-cdda` | Key Vault | germanywestcentral | Standard (default), RBAC authorization, soft delete 7 days, purge protection off | under $0.10 (a few hundred operations) | `infra/azure/deploy.ps1` | created 2026-11-23 | deleted with the RG, then purged by `cleanup.ps1` |
+| `sql-gpadmin-password` | Key Vault secret | (in the vault) | generated, 28 characters | included above | `deploy.ps1` | created 2026-11-23 | removed with the vault |
+| `customer-hash-salt` | Key Vault secret | (in the vault) | 32 random bytes (hex), kept on reruns | included above | `deploy.ps1` | created 2026-11-23 | removed with the vault |
 | `es-meters-conn` | Key Vault secret | (in the vault) | Eventstream custom endpoint connection string | included above | manual, copied from the Eventstream UI (PLAN T6.2) | not created yet | removed with the vault |
-| `sql-hz2611-cdda` | Azure SQL logical server | germanywestcentral | minimum TLS 1.2, SQL admin `gpadmin`, optional Entra admin (Nacir) | $0 | `deploy.ps1` | not created yet | deleted with the RG |
-| `AllowAzureServices`, `laptop-<user>` | SQL server firewall rules | (on the server) | 0.0.0.0 rule + the laptop's public IP | $0 | `deploy.ps1` | not created yet | deleted with the server |
-| `sqldb-hz2611-gridpulse` | Azure SQL Database | germanywestcentral | General Purpose serverless, Gen5, 2 vCores, free offer (100,000 vCore-seconds per month, auto-pause when used up), local backup redundancy | $0 (free offer; it pauses instead of billing) | `deploy.ps1`; schema, classifications and seed rows by `scripts/load_sql.py --schema` | not created yet | deleted with the RG |
-| `require-tag-project` | Policy assignment (RG scope), built-in `871b6d14-10aa-478d-b590-94f262ecfa99`, deny | n/a | n/a | $0 | `infra/azure/policy_assignments.ps1` | not created yet | removed with the RG |
-| `require-tag-owner` | Policy assignment (RG scope), same definition, deny | n/a | n/a | $0 | `policy_assignments.ps1` | not created yet | removed with the RG |
+| `sql-hz2611-cdda` | Azure SQL logical server | germanywestcentral | minimum TLS 1.2, SQL admin `gpadmin`, optional Entra admin (Nacir) | $0 | `deploy.ps1` | created 2026-11-23 (TLS 1.2) | deleted with the RG |
+| `AllowAzureServices`, `laptop-<user>` | SQL server firewall rules | (on the server) | 0.0.0.0 rule + the laptop's public IP | $0 | `deploy.ps1` | created 2026-11-23 | deleted with the server |
+| `sqldb-hz2611-gridpulse` | Azure SQL Database | germanywestcentral | General Purpose serverless, Gen5, 2 vCores, free offer (100,000 vCore-seconds per month, auto-pause when used up), local backup redundancy | $0 (free offer; it pauses instead of billing) | `deploy.ps1`; schema, classifications and seed rows by `scripts/load_sql.py --schema` | created 2026-11-23, useFreeLimit true, AutoPause; 10 / 50 / 50 rows | deleted with the RG |
+| `require-tag-project` | Policy assignment (RG scope), built-in `871b6d14-10aa-478d-b590-94f262ecfa99`, deny | n/a | n/a | $0 | `infra/azure/policy_assignments.ps1` | assigned 2026-11-23, denial tested | removed with the RG |
+| `require-tag-owner` | Policy assignment (RG scope), same definition, deny | n/a | n/a | $0 | `policy_assignments.ps1` | assigned 2026-11-23, denial tested | removed with the RG |
 | `sys.regionrestriction` | Policy assignment (subscription scope, inherited) | n/a | allowed: switzerlandnorth, italynorth, denmarkeast, germanywestcentral, polandcentral | $0 | the subscription, not us | exists | none (not ours) |
-| Role assignments: Hamza Contributor + Resource Policy Contributor, Omar Reader (RG); Nacir Key Vault Administrator, Hamza Key Vault Secrets Officer | Azure RBAC | n/a | n/a | $0 | Nacir, commands of PLAN 5.3 | not created yet | removed with the RG |
-| `stgpulsepolicytest` | Storage account used only by the policy test | germanywestcentral | Standard_LRS | $0 | `policy_assignments.ps1 -Test` | never meant to exist: the policy refuses it; if the policy is not effective yet, the script deletes it right away | none |
+| Role assignments: Nacir Key Vault Secrets Officer at RG scope (created 2026-11-23, needed by deploy.ps1); planned: Hamza Contributor + Resource Policy Contributor, Omar Reader (RG); Nacir Key Vault Administrator, Hamza Key Vault Secrets Officer | Azure RBAC | n/a | n/a | $0 | Nacir, commands of PLAN 5.3 | not created yet | removed with the RG |
+| `stgpulsepolicytest` | Storage account used only by the policy test | germanywestcentral | Standard_LRS | $0 | `policy_assignments.ps1 -Test` | refused by the policy on 2026-11-23, never created | none |
 
 ## Fabric (workspace `ws_gridpulse`)
 
 Fabric items have no SKU of their own; they all run on the workspace's capacity. Region = capacity region = Germany West Central.
 
-| Name | Type | Region | SKU / capacity | Monthly cost estimate | Created by | Status 2026-11-22 | Cleanup action |
+| Name | Type | Region | SKU / capacity | Monthly cost estimate | Created by | Status 2026-11-23 | Cleanup action |
 |---|---|---|---|---|---|---|---|
 | Nacir's trial capacity | Fabric trial capacity | Germany West Central | FTL4 (4 capacity units), 60 days | $0 | Nacir, Start trial in the Fabric UI | not started yet | expires on its own after 60 days |
 | `ws_gridpulse` | Workspace | Germany West Central | on the FTL4 trial | $0 | `infra/fabric/deploy_fabric.ps1 -CapacityName ... -AssignRoles` (roles need the Admin's login) | not created yet | `fab rm ws_gridpulse.Workspace -f` (Admin), deletes every item below |

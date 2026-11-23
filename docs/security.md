@@ -177,7 +177,7 @@ Status values: designed (written down, nothing to run yet), scripted (code exist
 | Purview scan of Azure SQL and OneLake | designed | section 8.3 |
 | OneLake catalog Govern view, labels | designed | `[TODO after T8.6: screenshots]` |
 | Allowed regions | in place in cloud (inherited) | `az policy assignment list` on 2026-11-06 listed `sys.regionrestriction` |
-| Required tags `project` and `owner`, deny | scripted | `infra/azure/policy_assignments.ps1`. `[TODO after T8.5: -Test output in docs/evidence/policy.md]` |
+| Required tags `project` and `owner`, deny | scripted | `infra/azure/policy_assignments.ps1`. Done 2026-11-23: an untagged storage account was refused with `RequestDisallowedByPolicy` (`docs/evidence/azure_foundation.md`, section 2). |
 | TDE, OneLake encryption at rest | platform default | nothing to deploy; screenshot of the TDE blade `[TODO after T1A.2]` |
 | TLS 1.2 minimum on SQL | scripted | `deploy.ps1` step 3 |
 | SQL firewall (Azure services + laptop IP) | scripted | `deploy.ps1` step 4 |

@@ -10,8 +10,10 @@ with a token from DefaultAzureCredential (your `az login`). All commands are ide
         --file realtime/kql/00_tables.kql
     uv run python infra/fabric/run_kql.py --file realtime/kql/00_tables.kql --dry-run
 
-If the token scope is refused, run the same file once in the KQL queryset UI (it is the same
-text) and continue.
+Token scope: read from the cluster's anonymous `/v1/rest/auth/metadata` endpoint
+(`AzureAD.KustoServiceResourceId`, as azure-kusto-data does), so it is right for Fabric Eventhouse
+query URIs as well as ADX clusters; `https://kusto.kusto.windows.net/.default` is the fallback.
+If the token is still refused, run the same file once in the KQL queryset UI (same text).
 """
 
 from __future__ import annotations
@@ -40,11 +42,35 @@ def split_commands(text: str) -> list[str]:
     return [b for b in blocks if b]
 
 
+def resolve_scope(cluster: str, client=None) -> str:
+    """Token scope announced by the cluster itself, KUSTO_SCOPE when the metadata is unreachable."""
+    import httpx
+
+    own = client is None
+    client = client or httpx.Client(timeout=20)
+    try:
+        r = client.get(f"{cluster.rstrip('/')}/v1/rest/auth/metadata")
+        aad = r.json().get("AzureAD", {}) if r.status_code == 200 else {}
+    except (httpx.HTTPError, ValueError):
+        aad = {}
+    finally:
+        if own:
+            client.close()
+    resource = aad.get("KustoServiceResourceId")
+    if not resource:
+        return KUSTO_SCOPE
+    if aad.get("LoginMfaRequired"):
+        resource = resource.replace(".kusto.", ".kustomfa.")
+    return resource.rstrip("/") + "/.default"
+
+
 def run(cluster: str, database: str, commands: list[str]) -> None:
     import httpx
     from azure.identity import DefaultAzureCredential
 
-    token = DefaultAzureCredential().get_token(KUSTO_SCOPE).token
+    scope = resolve_scope(cluster)
+    print(f"token scope: {scope}")
+    token = DefaultAzureCredential().get_token(scope).token
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     with httpx.Client(timeout=60, headers=headers) as client:
         for cmd in commands:

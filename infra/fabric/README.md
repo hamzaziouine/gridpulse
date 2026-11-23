@@ -3,7 +3,7 @@
 Everything GridPulse needs in Microsoft Fabric is created from this repo by
 `deploy_fabric.ps1`, except six items that Fabric only lets you configure in the browser
 (listed at the end). Status on 2026-11-22: **written and dry-run locally, not yet run against
-Fabric** (no trial capacity yet). Expect small fixes on the first real run; the places most
+Fabric** (no trial capacity of Nacir's visible on 2026-11-23; see `docs/MANUAL_STEPS.md` step 0). Expect small fixes on the first real run; the places most
 likely to need one are marked "verify" below.
 
 ## Files
@@ -47,17 +47,22 @@ left) and parses the KQL file. The same checks run in `tests/unit/test_render.py
 
 ## Things to verify on the first real run
 
-- **HTTP connection type name.** `fab mkdir .connections/...` needs Fabric's type name for an
-  anonymous HTTP source. The script uses `HttpServer` and, if Fabric refuses it, prints the
-  tenant's types that contain "Http" or "Web" and stops; rerun with `-HttpConnectionType <name>`.
-- **SQL connection body.** Built from the format in the `fab` CLI source (`type` and
-  `creationMethod` = `SQL`, parameters `server` and `database`, Basic credentials). The password
-  goes from Key Vault into a temp file that is deleted right after the call.
+- **HTTP connection type name: checked 2026-11-23.** `GET /v1/connections/supportedConnectionTypes`
+  on the UIR tenant lists `HttpServer` (creation method `HttpServer.Contents`, parameter `url`,
+  Anonymous allowed); snapshot in `tests/fixtures/fabric_connection_types.json`, pinned by
+  `tests/unit/test_fabric_contracts.py`. If Fabric still refuses it, the script prints the tenant's
+  Http/Web types and stops; rerun with `-HttpConnectionType <name>`.
+- **SQL connection body: checked against the API 2026-11-23.** `type` `SQL`, `creationMethod`
+  `Sql` (the exact name the API lists; the first version sent `SQL`), parameters `server` and
+  `database`, Basic credentials. The password goes from Key Vault into a temp file that is deleted
+  right after the call. Not yet created for real (no workspace).
 - **Office 365 Outlook activity.** Its JSON (`type: Office365Outlook`, `inputs.path: /v2/Mail`)
   is written from memory of an exported pipeline. After creating `con_outlook_alerts` in the UI,
   export `pl_daily_ingest` (`fab export`) and align `gen_pipelines.py` with what Fabric wrote.
-- **Kusto token scope** in `run_kql.py` (`https://kusto.kusto.windows.net/.default`). If refused,
-  paste `00_tables.kql` into the KQL queryset once; the commands are idempotent.
+- **Kusto token scope.** `run_kql.py` now asks the cluster (`/v1/rest/auth/metadata`,
+  `KustoServiceResourceId`) like azure-kusto-data does, falling back to
+  `https://kusto.kusto.windows.net/.default`; it prints the scope it used. Not yet run against an
+  Eventhouse. If refused, paste `00_tables.kql` into the KQL queryset once (idempotent).
 - **Environment publish time.** The first publish installs `holidays` and the wheel and can take
   several minutes; `fab import` waits for it.
 

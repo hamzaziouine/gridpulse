@@ -1,0 +1,90 @@
+{
+    "value":  [
+                  {
+                      "creationMethods":  [
+                                              {
+                                                  "name":  "Sql",
+                                                  "parameters":  [
+                                                                     {
+                                                                         "allowedValues":  null,
+                                                                         "dataType":  "Text",
+                                                                         "name":  "server",
+                                                                         "required":  true
+                                                                     },
+                                                                     {
+                                                                         "allowedValues":  null,
+                                                                         "dataType":  "Text",
+                                                                         "name":  "database",
+                                                                         "required":  false
+                                                                     }
+                                                                 ]
+                                              }
+                                          ],
+                      "supportedConnectionEncryptionTypes":  [
+                                                                 "NotEncrypted",
+                                                                 "Encrypted"
+                                                             ],
+                      "supportedCredentialTypes":  [
+                                                       "Basic",
+                                                       "OAuth2",
+                                                       "ServicePrincipal",
+                                                       "WorkspaceIdentity"
+                                                   ],
+                      "supportedCredentialTypesForUsageInUserControlledCode":  [
+                                                                                   "Basic",
+                                                                                   "ServicePrincipal",
+                                                                                   "WorkspaceIdentity"
+                                                                               ],
+                      "supportsSkipTestConnection":  false,
+                      "type":  "SQL"
+                  },
+                  {
+                      "creationMethods":  [
+                                              {
+                                                  "name":  "HttpServer.Contents",
+                                                  "parameters":  [
+                                                                     {
+                                                                         "allowedValues":  null,
+                                                                         "dataType":  "Text",
+                                                                         "name":  "url",
+                                                                         "required":  true
+                                                                     }
+                                                                 ]
+                                              }
+                                          ],
+                      "supportedConnectionEncryptionTypes":  [
+                                                                 "NotEncrypted"
+                                                             ],
+                      "supportedCredentialTypes":  [
+                                                       "OAuth2",
+                                                       "Basic",
+                                                       "Anonymous"
+                                                   ],
+                      "supportedCredentialTypesForUsageInUserControlledCode":  null,
+                      "supportsSkipTestConnection":  false,
+                      "type":  "HttpServer"
+                  },
+                  {
+                      "creationMethods":  [
+                                              {
+                                                  "name":  "MicrosoftOutlook.Actions",
+                                                  "parameters":  [
+
+                                                                 ]
+                                              }
+                                          ],
+                      "supportedConnectionEncryptionTypes":  [
+                                                                 "NotEncrypted"
+                                                             ],
+                      "supportedCredentialTypes":  [
+                                                       "OAuth2",
+                                                       "ServicePrincipal",
+                                                       "WorkspaceIdentity"
+                                                   ],
+                      "supportedCredentialTypesForUsageInUserControlledCode":  null,
+                      "supportsSkipTestConnection":  false,
+                      "type":  "MicrosoftOutlook"
+                  }
+              ],
+    "source":  "GET https://api.fabric.microsoft.com/v1/connections/supportedConnectionTypes, UIR tenant, 2026-11-23 (3 of 298 types kept)"
+}

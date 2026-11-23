@@ -50,8 +50,10 @@ function Test-AzExists {
 function Invoke-AzQuiet {
     # Like Invoke-Az but tolerant: returns @{ ok; text } and never throws (stderr captured).
     $flat = foreach ($a in $args) { $a }
-    $old = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
-    try { $text = (& $Az @flat 2>&1 | Out-String) } finally { $ErrorActionPreference = $old }
+    # 'Continue', not 'SilentlyContinue': PowerShell 5.1 drops native stderr records under
+    # SilentlyContinue even with 2>&1, which left the text empty (SecretNotFound was never seen).
+    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { $text = (& $Az @flat 2>&1 | ForEach-Object { "$_" } | Out-String) } finally { $ErrorActionPreference = $old }
     return @{ ok = ($LASTEXITCODE -eq 0); text = $text.Trim() }
 }
 

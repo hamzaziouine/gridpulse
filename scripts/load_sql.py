@@ -139,7 +139,7 @@ def kv_secret(vault_url: str, name: str) -> str:
 def azure_connection_string(server: str, database: str, user: str | None, password: str | None,
                             entra: bool) -> str:  # fmt: skip
     base = (f"Server=tcp:{server},1433;Database={database};Encrypt=yes;"
-            "TrustServerCertificate=no;Connection Timeout=30;")  # fmt: skip
+            "TrustServerCertificate=no;ConnectRetryCount=3;ConnectRetryInterval=10;")  # fmt: skip
     if entra:
         return base + "Authentication=ActiveDirectoryDefault;"
     if not (user and password):

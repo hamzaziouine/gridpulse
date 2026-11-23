@@ -13,7 +13,7 @@ Technical report
 | Date | `[TODO: submission date]` |
 | Version | skeleton of 2026-11-22 |
 
-Status of this draft (2026-11-22). The code was tested locally only: the five notebooks (bronze, silver, gold, forecast, predict) ran on the real raw files with a local Spark 3.5. In Azure, only the resource group `rg-hz2611-cdda` and its budget exist; nothing exists in Fabric yet. Every result that needs the cloud is marked `[TODO ...]`. Model metrics come from the local training run (`docs/evidence/model_metrics.md`).
+Status of this draft (2026-11-22). The code was tested locally only: the five notebooks (bronze, silver, gold, forecast, predict) ran on the real raw files with a local Spark 3.5. Azure update (2026-11-23): the Azure foundation is deployed and tested in Azure: Key Vault, Azure SQL free-offer database with the reference data, and the two tag policies, with their live denial test (`docs/evidence/azure_foundation.md`). Nothing exists in Fabric yet. Every result that needs the cloud is marked `[TODO ...]`. Model metrics come from the local training run (`docs/evidence/model_metrics.md`).
 
 ---
 
@@ -46,7 +46,7 @@ Results so far:
 | Pipeline runs twice without duplicates (success criterion 1) | `[TODO after T3.4]` | Fabric |
 | Live events visible within 10 s, anomaly flagged (criterion 3) | `[TODO after T6.4]` | Fabric |
 | Forecast beats seasonal-naive MAPE by at least 30 % (criterion 6) | met on history, scored with weather of the production lead time: holdout 2026 MAPE 2.90 % vs 6.84 % (skill 57.6 %), monthly backtest 2.56 % vs 6.95 % (skill 63.1 %) | local run; live rows in Fabric still to come |
-| Key Vault and Azure Policy demonstrated (criterion 5) | `[TODO after T8.4, T8.5]` | Azure |
+| Key Vault and Azure Policy demonstrated (criterion 5) | Azure part done: secrets generated into `kv-hz2611-cdda` and read back by `load_sql.py`; an untagged resource refused with `RequestDisallowedByPolicy`. Fabric part (`nb_silver` reading the salt) `[TODO after T8.4]` | Azure, 2026-11-23, `docs/evidence/azure_foundation.md` |
 
 Team and contributions (planned; `[TODO: final version with commit counts from git log]`):
 
@@ -84,7 +84,7 @@ Team and contributions (planned; `[TODO: final version with commit counts from g
 | FR3 | Ingest live meter events and analyse them with KQL | events in the Eventhouse within 10 s; Q1 and Q2 return results; injected anomaly flagged | KQL written; `[TODO after T6.3, T6.4]` |
 | FR4 | Report for the business questions | at least 4 visuals, 3 KPIs, slicers; Q1 to Q4 answered | spec written; `[TODO after T7.2]` |
 | FR5 | Day-ahead forecast with tracked experiments | beats seasonal-naive MAPE by at least 30 % | met on history (skill 60.5 % holdout, 64.8 % backtest), tested locally; `[TODO after T5.1: same run in Fabric]` |
-| FR6 | Security controls | Key Vault and Azure Policy demonstrated live | scripted; `[TODO after T8.4, T8.5]` |
+| FR6 | Security controls | Key Vault and Azure Policy demonstrated live | Key Vault + Policy done in Azure on 2026-11-23 (`docs/evidence/azure_foundation.md`); Fabric secret read `[TODO after T8.4]` |
 | FR7 | Cost control and cleanup | all resources deleted or paused after the demo, listed in the inventory | scripted (`cleanup.ps1`), `docs/resource_inventory.md` |
 
 Non-functional requirements: cost under the $20 monthly budget alert; every resource in Germany West Central (allowed by the subscription policy); the whole platform rebuildable from the repository (section 11); source licences respected (`NOTICE.md`: no bulk IESO files in Git, Open-Meteo attribution under CC BY 4.0).
@@ -131,7 +131,7 @@ Ontario demand ranges from 9,831 to 25,646 MW (median 15,628 MW), with no zero o
 
 S2, Open-Meteo. We use the Historical Forecast API rather than observed (reanalysis) weather: it returns what the weather model forecast at the time, so the forecast model never trains on weather it could not have known (DESIGN D3). Five cities with population weights renormalised to sum to 1: Toronto 0.5294, Ottawa 0.1765, London 0.1176, Windsor 0.0941, Sudbury 0.0824. Nine variables: temperature, apparent temperature, relative humidity, dew point, wind speed, cloud cover, shortwave radiation, precipitation, snowfall. No null cell in any variable, no duplicated hour.
 
-S3, reference data. Generated with Faker (seed 2611) by `scripts/gen_reference_data.py`: `example.com` emails and `555-01xx` phone numbers, so no row can belong to a real person. Schema in `sql/001_schema.sql`: primary and foreign keys, CHECK constraints on coordinates, segment, tariff and status, and sensitivity classifications on five PII columns. Loaded by `scripts/load_sql.py`, which reads the admin password from Key Vault. `[TODO after T2.1: row counts read back from Azure SQL]`
+S3, reference data. Generated with Faker (seed 2611) by `scripts/gen_reference_data.py`: `example.com` emails and `555-01xx` phone numbers, so no row can belong to a real person. Schema in `sql/001_schema.sql`: primary and foreign keys, CHECK constraints on coordinates, segment, tariff and status, and sensitivity classifications on five PII columns. Loaded by `scripts/load_sql.py`, which reads the admin password from Key Vault. Read back from Azure SQL on 2026-11-23: sites 10, customers 50, meters 50, with the five classifications in place; a second run gave the same counts (`docs/evidence/azure_foundation.md`).
 
 S4, meter events. `{ts, meter_id, site_id, kw, voltage, status}`. The load follows the real Ontario shape by month and EST hour (`realtime/shape_profile.csv`, built from IESO 2019 to 2025), scaled to each meter's rated kW, with 5 % noise. Meters in maintenance report 0 kW (2 of 50).
 
@@ -565,7 +565,7 @@ Deliverable 7: `docs/resource_inventory.md` lists every planned Azure and Fabric
 |---|---|---|
 | `docs/evidence/rbac.md` (role assignments, workspace roles) | T8.1 | 8 |
 | Omar's 403 on Key Vault, Viewer access test on `bronze_customers` | T8.2 | 8 |
-| `docs/evidence/policy.md` (`-Test` output) | T8.5 | 8 |
+| `docs/evidence/azure_foundation.md` (`-Test` output, section 2) | T8.5 | 8 |
 | SQL classification screenshot and query | T2.2 | 3, 8 |
 | Pipeline run screenshots, `docs/evidence/idempotency.md` | T3.3, T3.4 | 5 |
 | Failure mail screenshot | T3.6 | 8 |

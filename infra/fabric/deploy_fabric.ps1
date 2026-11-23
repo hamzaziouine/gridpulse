@@ -205,7 +205,7 @@ if (Test-FabExists $sqlConn) {
     if ($LASTEXITCODE -ne 0 -or -not $pwd_) { throw "cannot read $SqlPwdSecret from $KeyVault (az login? Key Vault Secrets User role?)" }
     $body = @{
         displayName = 'con_sql_gridpulse'; connectivityType = 'ShareableCloud'; privacyLevel = 'Organizational'
-        connectionDetails = @{ type = 'SQL'; creationMethod = 'SQL'; parameters = @(
+        connectionDetails = @{ type = 'SQL'; creationMethod = 'Sql'; parameters = @(
             @{ dataType = 'Text'; name = 'server'; value = $SqlServer },
             @{ dataType = 'Text'; name = 'database'; value = $SqlDatabase }) }
         credentialDetails = @{ singleSignOnType = 'None'; connectionEncryption = 'Encrypted'; skipTestConnection = $false
