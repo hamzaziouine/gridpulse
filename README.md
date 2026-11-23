@@ -19,20 +19,20 @@ now. GridPulse puts the three in one governed platform:
 
 ![Architecture](docs/architecture.png)
 
-## Status (2026-11-22)
+## Status (2026-11-23)
 
 | Part | State |
 |---|---|
-| Spark notebooks (bronze, silver, gold, forecast, predict) | Written, **tested locally** on the real 2019-2026 data with local Spark 3.5; not run in Fabric yet |
-| Forecast model | Tested locally, trained and scored with weather of the production lead time: holdout 2026 MAPE 2.90 % vs 6.84 % for the seasonal naive, monthly backtest 2.56 % vs 6.95 % ([details](docs/evidence/model_metrics.md)) |
-| Data Factory pipelines, environment, deploy script | Written, dry-run locally (no Fabric capacity yet) |
-| Azure scripts (Key Vault, SQL, policy, inventory, cleanup) | Written; only the resource group and its budget exist in Azure |
-| SQL loader | Tested locally against SQLite; not run against Azure SQL yet |
-| Simulator and KQL | Simulator dry-run tested; KQL not run against an Eventhouse yet |
-| Power BI | Specification and DAX measures written; model and report are built in the Fabric UI |
+| Azure foundation | Deployed in `rg-hz2611-cdda`: Key Vault with 2 secrets, SQL server and free-offer database with 10 sites, 50 customers, 50 meters, 2 tag policies with a live denial test ([evidence](docs/evidence/azure_foundation.md)). Budget spend 0.00 USD |
+| Fabric workspace `ws_gridpulse` | Created with `deploy_fabric.ps1` on an FTL4 trial capacity that belongs to a classmate outside the team: Lakehouse, environment, 5 notebooks, 2 pipelines, connections, Eventhouse, empty Eventstream |
+| Batch pipelines and Spark notebooks | Run in Fabric: `pl_backfill` once (63.5 min), `pl_daily_ingest` twice for the same date with identical row counts ([idempotency](docs/evidence/idempotency.md), [runs](docs/evidence/fabric_batch.md)). Data quality: 21 checks, 18 PASS, 3 WARN, 0 FAIL |
+| Daily schedule | 13:15 UTC, from 2026-11-24 to 2026-12-17. First scheduled run pending |
+| Forecast model | Cloud run (data to 2026-11-22): holdout 2026 MAPE 2.815 % vs 6.724 % for the seasonal naive, monthly backtest 2.546 % vs 6.895 %. Local run (data to 2026-11-06): 2.90 % vs 6.84 % and 2.56 % vs 6.95 % ([local details](docs/evidence/model_metrics.md)). First 24 live rows written for 2026-11-24 |
+| Roles | RG: Hamza Contributor + Resource Policy Contributor + Key Vault Secrets Officer, Omar Reader, Nacir Owner (subscription) + Key Vault Secrets Officer. Workspace: Hamza Admin, Nacir Member, Omar Viewer ([evidence](docs/evidence/rbac.md)). No SQL Entra admin yet |
+| Real time (simulator, Eventstream, KQL) | Not verified: Eventhouse table exists with 0 rows; the Eventstream has no source or destination; no event sent, no KQL run on stream data |
+| Power BI | Not built: specification and DAX measures only |
 
-Nothing in this repo has been run in Azure or Fabric except creating `rg-hz2611-cdda` and its
-budget on 2026-11-06.
+Still needs a person in the browser ([docs/MANUAL_STEPS.md](docs/MANUAL_STEPS.md)): Eventstream source and destination, the Outlook connection for the failure mail, the semantic model and report, the Real-Time Dashboard, the Activator rule, and the Viewer PII check.
 
 ## Repository map
 
@@ -98,7 +98,8 @@ charge and stops itself above 28 GB. MLflow runs go to `mlruns/` (git-ignored).
    denial test).
 2. **Reference data**: `uv run python scripts/load_sql.py --schema --server sql-hz2611-cdda.database.windows.net`
    (password read from Key Vault with your `az login`).
-3. **Fabric**: Nacir starts the trial; then
+3. **Fabric**: a Fabric capacity is needed (on 2026-11-23 we used an FTL4 trial that belongs to a
+   classmate outside the team, because Nacir's own trial was not visible); then
    `powershell -File infra\fabric\deploy_fabric.ps1 -CapacityName "<trial>" -AssignRoles`.
    Read `infra/fabric/README.md` first; run it with `-DryRun` to see every command.
 4. **Browser-only steps**: Eventstream source and destination, Outlook connection, semantic model,
@@ -128,6 +129,7 @@ charge and stops itself above 28 GB. MLflow runs go to `mlruns/` (git-ignored).
 - [Power BI model](powerbi/semantic_model_spec.md), [measures](powerbi/measures.dax), [report spec](powerbi/report_spec.md)
 - [Demo script](docs/demo_script.md), [resource inventory and cleanup](docs/resource_inventory.md)
 - [Model metrics](docs/evidence/model_metrics.md), [Fabric deployment](infra/fabric/README.md)
+- Cloud evidence: [Azure foundation](docs/evidence/azure_foundation.md), [Fabric batch runs](docs/evidence/fabric_batch.md), [idempotency](docs/evidence/idempotency.md), [roles](docs/evidence/rbac.md)
 
 ## Data and licences
 
@@ -135,3 +137,7 @@ Code: MIT (`LICENSE`). IESO data is used under the IESO Terms of Use and is not 
 only the download scripts and short test excerpts are in the repo. Open-Meteo data is CC BY 4.0.
 Customer data is synthetic (Faker, `example.com` addresses, fictional 555-01xx phone numbers).
 Attributions: `NOTICE.md`.
+
+Prior work: the IESO and Open-Meteo parsers, the time model, the calendar features, some tests
+and fixtures, and the LightGBM parameters are ported from Hamza's earlier personal project
+GridCast (https://github.com/hamzaziouine/gridcast). Details in `NOTICE.md`.
