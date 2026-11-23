@@ -262,7 +262,8 @@ Columns returned by the KQL queries (computed at query time, not stored):
 | Q1 | `site_kwh` | real | kWh | `site_kw x 5/60`, energy of the window |
 | Q1 | `meters` | long | | Distinct meters that reported in the window |
 | Q2 `q2_anomaly.kql` | `minute` | datetime | | Last complete minute |
-| Q2 | `site_kw` | real | kW | Site load summed over that minute's readings |
+| Q2 | `site_kw` | real | kW | Sum over the site's meters of each meter's mean kW in that minute (same rule as Q1, so it does not depend on how many readings arrived) |
+| Q2 | `meters` | long | | Distinct meters that reported in that minute |
 | Q2 | `mean_kw`, `threshold_kw` | real | kW | Mean of the site's per-minute load over the trailing hour, and mean + 3 standard deviations |
 | Q2 | `z` | real | | `(site_kw - mean_kw) / sd`. A row appears only when `site_kw > threshold_kw` and the baseline has at least 10 minutes |
 | Q3 `q3_top5.kql` | `site_id`, `site_kw` | int, real | kW | Top 5 sites by summed mean meter load over the last 15 minutes |

@@ -1,8 +1,14 @@
 // Q2 (abnormal demand, DESIGN D11/D12): a site's latest 1-minute load above its own
 // trailing 1-hour mean + 3 sigma. Feeds the Real-Time Dashboard tile and the Activator alert.
-let per_minute = meter_readings
+// Load = mean kW of each meter in the minute, summed over the site's meters (as in Q1), so the
+// value does not depend on how many readings arrived in the minute: a dropped, late or
+// duplicated event changes one meter's mean a little instead of moving the site total by a
+// whole reading. tests/unit/test_kql_q2.py replays this logic on simulated events.
+let per_meter = meter_readings
     | where ts > ago(65m)
-    | summarize site_kw = sum(kw) by site_id, minute = bin(ts, 1m);
+    | summarize meter_kw = avg(kw) by site_id, meter_id, minute = bin(ts, 1m);
+let per_minute = per_meter
+    | summarize site_kw = sum(meter_kw), meters = dcount(meter_id) by site_id, minute;
 let baseline = per_minute
     | where minute < bin(now(), 1m) - 1m
     | summarize mean_kw = avg(site_kw), sd_kw = stdev(site_kw), n = count() by site_id;
@@ -10,5 +16,5 @@ per_minute
 | where minute == bin(now(), 1m) - 1m          // last complete minute
 | join kind=inner baseline on site_id
 | where n >= 10 and site_kw > mean_kw + 3 * sd_kw
-| project minute, site_id, site_kw, mean_kw, threshold_kw = mean_kw + 3 * sd_kw,
+| project minute, site_id, site_kw, meters, mean_kw, threshold_kw = mean_kw + 3 * sd_kw,
     z = (site_kw - mean_kw) / sd_kw

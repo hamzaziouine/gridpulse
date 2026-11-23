@@ -330,7 +330,7 @@ meter_readings
 
 Averaging per meter first, then summing per site, keeps the result independent of how many readings each meter sent in the window.
 
-Q2, abnormal demand (`q2_anomaly.kql`): a site's load in the last complete minute above its own trailing one-hour mean plus 3 standard deviations, only once the site has at least 10 baseline minutes. The current, incomplete minute is excluded so a half-filled minute never looks low or high. This query drives the dashboard's anomaly tile and the Activator alert.
+Q2, abnormal demand (`q2_anomaly.kql`): a site's load in the last complete minute above its own trailing one-hour mean plus 3 standard deviations, only once the site has at least 10 baseline minutes. The site load of a minute is built like Q1: mean kW per meter, then summed over the site's meters. Our first version summed every reading of the minute, so a duplicated event looked like a load spike and dropped events could hide a real one; `tests/unit/test_kql_q2.py` replays both versions on simulated events to show the difference (KQL itself only runs in the Eventhouse). The current, incomplete minute is excluded so a half-filled minute never looks low or high. This query drives the dashboard's anomaly tile and the Activator alert.
 
 Q3, bonus: top 5 sites by average load over the last 15 minutes (`q3_top5.kql`).
 
