@@ -84,6 +84,15 @@ function Invoke-Fab {
     return $out.Trim()
 }
 
+function Invoke-FabApi {
+    # fab api exits 0 even on HTTP 4xx/5xx, so read the status code from its JSON output.
+    $out = Invoke-Fab api @args
+    if (-not $DryRun -and $out -match '"status_code":\s*(\d{3})' -and [int]$Matches[1] -ge 400) {
+        throw "fab api returned HTTP $($Matches[1]): $out"
+    }
+    return $out
+}
+
 function Test-FabExists($path) {
     if ($DryRun) { Write-Host "DRYRUN fab exists $path" -ForegroundColor DarkGray; return $false }
     $out = Invoke-Fab exists $path
@@ -190,7 +199,7 @@ function Set-HttpConnection($name, $url, $token) {
             Invoke-Fab mkdir $path -P "connectionDetails.type=$HttpConnectionType,connectionDetails.parameters.url=$url,credentialDetails.type=Anonymous,privacyLevel=Public" | Out-Null
         } catch {
             Write-Warning "creating $name failed. Connection types containing http/web in this tenant:"
-            Invoke-Fab api connections/supportedConnectionTypes -q "value[?contains(type, 'Http') || contains(type, 'Web')].type" | Write-Host
+            Invoke-FabApi connections/supportedConnectionTypes -q "text.value[?contains(type, 'Http') || contains(type, 'Web')].type" | Write-Host
             throw "rerun with -HttpConnectionType <one of the above>, or create '$name' (anonymous, $url) in Manage connections"
         }
         Write-Host "$name created"
@@ -222,7 +231,7 @@ if (Test-FabExists $sqlConn) {
     $tmp = New-TemporaryFile
     try {
         Set-Content -Path $tmp -Value $body -Encoding ascii -NoNewline
-        Invoke-Fab api -X post connections -i $tmp.FullName | Out-Null
+        Invoke-FabApi -X post connections -i $tmp.FullName | Out-Null
     } finally { Remove-Item $tmp -Force; $body = $null; $pwd_ = $null }
     Write-Host 'con_sql_gridpulse created'
 }
