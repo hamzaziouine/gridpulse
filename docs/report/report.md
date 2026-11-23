@@ -27,7 +27,7 @@ Decisions supported:
 - spotting abnormal sites from live meter readings;
 - judging whether the day-ahead forecast can be trusted, against a simple baseline.
 
-What we built:
+What the solution consists of (the table below says what is tested locally and what still has to run in the cloud):
 
 - Four heterogeneous sources: IESO hourly demand (CSV over HTTP), Open-Meteo weather forecasts (JSON over REST), reference data with customer PII in Azure SQL Database, and simulated smart-meter events.
 - A daily Data Factory pipeline into a bronze/silver/gold Lakehouse, with Spark notebooks and 17 data-quality checks per run.
@@ -96,7 +96,7 @@ Non-functional requirements: cost under the $20 monthly budget alert; every reso
 | 2 or more heterogeneous sources | 4 (CSV over HTTP, JSON over REST, relational SQL, event stream) | sources pulled and generated locally |
 | 1 or more batch pipeline | `pl_daily_ingest` (daily), `pl_backfill` (one-off) | written, not deployed |
 | 1 or more Lakehouse with documented layers | `lh_gridpulse`, bronze / silver / gold | tested locally |
-| 1 or more Spark notebook writing Delta | `nb_bronze`, `nb_silver`, `nb_gold`, `nb_forecast`, `nb_predict` | first three tested locally |
+| 1 or more Spark notebook writing Delta | `nb_bronze`, `nb_silver`, `nb_gold`, `nb_forecast`, `nb_predict` | all five tested locally (Parquet stand-in for Delta); Delta write `[TODO after T4.2]` |
 | 1 or more stream into Eventstream and Eventhouse | simulator → `es_meters` → `eh_gridpulse` | simulator dry-run tested locally |
 | 2 or more KQL queries, one with a time window | Q1 (5-minute tumbling window), Q2 (anomaly), Q3 (top 5) | written |
 | Power BI: 4 visuals, 2 KPIs, 1 slicer | 4 pages planned, 3 KPIs, 3 slicers | spec written |
@@ -300,7 +300,7 @@ Row counts of the local run (2026-11-22). `bronze_openmeteo_forecast` and `silve
 | gold | `gold_top_peaks` | 688 |
 | gold | `gold_temp_sensitivity` | 315 |
 | gold | `gold_sensitivity_yearly` | 8 |
-| gold | `gold_city_weather_daily` | 14,335 |
+| gold | `gold_city_weather_daily` | 14,330 |
 | gold | `gold_dim_date`, `gold_dim_city`, `gold_dim_site`, `gold_dim_meter` | 2,874, 5, 10, 50 |
 
 Local run times on a laptop (local Spark 3.5, 2 cores): `nb_bronze` 9 s, `nb_silver` 26 s, `nb_gold` 15 s. Not measured in Fabric yet.
@@ -464,7 +464,7 @@ See the last column of the table in section 4.3. In short: the batch sources bar
 - A Purview scan with sensitivity labels.
 - Key Vault and SQL diagnostic logs with alerts.
 - Probabilistic forecasts (quantiles), drift monitoring and scheduled retraining.
-- A CI workflow running the tests and the offline dry run on every push.
+- The CI workflow (section 9.5) running on GitHub on every push, once the repository is published.
 
 ## 11. Reproducibility and cleanup instructions
 

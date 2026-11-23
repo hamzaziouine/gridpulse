@@ -2,8 +2,10 @@
 
 Ported from GridCast `ingest/openmeteo.py` (database layer removed).
 - Model pinned to `gfs_seamless` (no silent model switch), all times UTC (`timezone=GMT`).
-- The Historical Forecast API returns forecasts as issued at the time, so a model trained on it
-  never sees weather it would not have had (DESIGN D3, no leakage).
+- The Historical Forecast API returns archived forecasts, not observations or a reanalysis, so
+  a model trained on it sees forecast-like weather (DESIGN D3). It stitches the newest run for
+  each hour, so its lead time is shorter than the day-ahead forecast used live: see the
+  limitation in gridpulse.features.
 - Free-tier limits: 600 calls/min, 5,000/h, 10,000/day, where one request counts
   `locations x max(1, variables/10) x max(1, days/14)` calls.
 """
