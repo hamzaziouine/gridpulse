@@ -2,7 +2,7 @@
 
 Planned Azure and Fabric resources of GridPulse, with region, size, cost estimate, how each one gets created, its status, and how it gets removed. Status as of 2026-11-22: only the resource group `rg-hz2611-cdda` and the budget `budget-cdda-20usd` exist (both created on 2026-11-06 under Nacir's account). Everything else is "not created yet".
 
-Cost estimates come from DESIGN section 3. Subscription: "Azure for Students" (owner Mohamed NACIR, id `<subscription-guid>`). Tags on every Azure resource: `project=cdda-gridpulse`, `owner=hamza.ziouine`, `course=CDDA-2627`.
+Cost estimates come from DESIGN section 3. Subscription: "Azure for Students" (owner Mohamed NACIR; the subscription and tenant ids are kept in the git-ignored `infra/local.settings.json`). Tags on every Azure resource: `project=cdda-gridpulse`, `owner=hamza.ziouine`, `course=CDDA-2627`.
 
 ## Azure (resource group `rg-hz2611-cdda`)
 

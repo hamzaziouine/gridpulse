@@ -28,7 +28,7 @@
 param(
     [string]$Workspace = 'ws_gridpulse',
     [string]$CapacityName,
-    [string]$AlertTo = '<alert-email-1>;<alert-email-2>',
+    [string]$AlertTo,   # default: fabric.alertTo of infra/local.settings.json
     [string]$HttpConnectionType = 'HttpServer',
     [string]$ScheduleEnd,
     [switch]$AssignRoles,
@@ -53,10 +53,13 @@ $Notebooks = @('nb_bronze', 'nb_silver', 'nb_gold', 'nb_forecast', 'nb_predict')
 $Pipelines = @('pl_daily_ingest', 'pl_backfill')
 $Folders = @('Files/bronze', 'Files/bronze/ieso', 'Files/bronze/openmeteo',
              'Files/bronze/openmeteo_forecast', 'Files/libs')
-$Personas = @{
-    '<entra-object-id-of-the-data-engineer>' = 'Member'   # Hamza ZIOUINE, Data Engineer
-    '<entra-object-id-of-the-analyst>' = 'Viewer'   # Omar MOUNABBIH, Analyst
-}
+# Alert addresses and persona object ids come from infra/local.settings.json (git-ignored,
+# template infra/local.settings.example.json). -DryRun falls back to the template placeholders.
+. "$PSScriptRoot\..\local_settings.ps1"
+$GpLocal = Get-GridPulseSettings -Section fabric -AllowExample:$DryRun
+if (-not $AlertTo) { $AlertTo = $GpLocal.fabric.alertTo }
+$Personas = [ordered]@{}
+foreach ($p in @($GpLocal.fabric.personas)) { $Personas[$p.objectId] = $p.role }   # Data Engineer = Member, Analyst = Viewer
 $SqlServer = 'sql-hz2611-cdda.database.windows.net'
 $SqlDatabase = 'sqldb-hz2611-gridpulse'
 $SqlUser = 'gpadmin'

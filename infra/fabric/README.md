@@ -16,6 +16,7 @@ likely to need one are marked "verify" below.
 | `run_kql.py` | Runs `realtime/kql/00_tables.kql` on the Eventhouse (Kusto REST, your `az login` token) |
 | `deploy_fabric.ps1` | The deployment, in order, idempotent, with `-DryRun` |
 | `ids.local.json` | Written by the deploy, git-ignored |
+| `../local.settings.json` | Alert e-mails and persona object ids (also the Azure subscription and tenant ids), git-ignored; copy `../local.settings.example.json`. `-DryRun` uses the placeholders when it is missing |
 
 ## Order of a full deployment
 

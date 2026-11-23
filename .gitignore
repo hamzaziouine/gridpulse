@@ -17,3 +17,6 @@ realtime/anomaly.json
 realtime/anomaly.done.json
 # Office/Power BI temp files
 ~$*
+
+# Real subscription/tenant/object ids and e-mails (template: infra/local.settings.example.json)
+infra/local.settings.json

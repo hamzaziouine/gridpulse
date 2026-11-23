@@ -53,3 +53,67 @@ def test_no_secret_looking_values_tracked() -> None:
             continue
         hits += [f"{f}: {pat.pattern}" for pat in patterns if pat.search(text)]
     assert not hits, hits
+
+
+GUID_RE = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I)
+EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
+# Public Azure built-in policy definition "Require a tag on resources".
+ALLOWED_GUIDS = {"871b6d14-10aa-478d-b590-94f262ecfa99"}
+ALLOWED_MAIL_DOMAINS = ("example.com", "onelake.dfs.fabric.microsoft.com", "anthropic.com")
+
+
+def _texts() -> list[tuple[str, str]]:
+    out = []
+    for f in tracked():
+        p = ROOT / f
+        if f == "uv.lock" or p.suffix.lower() in {".png", ".pdf", ".whl", ".parquet"}:
+            continue
+        if not p.is_file():
+            continue
+        try:
+            out.append((f, p.read_text(encoding="utf-8")))
+        except UnicodeDecodeError:
+            continue
+    return out
+
+
+def test_no_real_tenant_ids_or_emails_tracked() -> None:
+    """Subscription, tenant and Entra object ids and personal e-mails live only in the
+    git-ignored infra/local.settings.json. Only fake ids (all-zero prefix), public built-in
+    definitions and example addresses may appear in tracked files."""
+    assert "infra/local.settings.json" not in tracked()
+    hits = []
+    for f, text in _texts():
+        for g in GUID_RE.findall(text):
+            if not g.startswith("00000000-") and g.lower() not in ALLOWED_GUIDS:
+                hits.append(f"{f}: {g}")
+        for m in EMAIL_RE.findall(text):
+            if not m.lower().endswith(ALLOWED_MAIL_DOMAINS):
+                hits.append(f"{f}: {m}")
+    assert not hits, hits
+
+
+def test_local_settings_values_never_tracked() -> None:
+    """When a real infra/local.settings.json exists, none of its values is in a tracked file."""
+    import json
+
+    local = ROOT / "infra" / "local.settings.json"
+    if not local.exists():
+        return
+    s = json.loads(local.read_text("utf-8-sig"))
+    values = [s["azure"]["subscriptionId"], s["azure"]["tenantId"]]
+    values += [m for m in s["fabric"]["alertTo"].split(";") if m]
+    values += [p["objectId"] for p in s["fabric"]["personas"]]
+    hits = [f"{f}: {v}" for f, text in _texts() for v in values if v and v in text]
+    assert not hits, hits
+
+
+def test_local_settings_example_has_only_placeholders() -> None:
+    import json
+
+    ex = json.loads((ROOT / "infra" / "local.settings.example.json").read_text("utf-8"))
+    flat = json.dumps(ex)
+    assert not GUID_RE.search(flat) and not EMAIL_RE.search(flat)
+    assert set(ex) >= {"azure", "fabric"}
+    assert {"subscriptionId", "tenantId"} <= set(ex["azure"])
+    assert {"alertTo", "personas"} <= set(ex["fabric"])

@@ -1,0 +1,14 @@
+{
+  "_comment": "Copy to infra/local.settings.json (git-ignored) and fill in real values. Never commit the copy.",
+  "azure": {
+    "subscriptionId": "<subscription-guid>",
+    "tenantId": "<tenant-guid>"
+  },
+  "fabric": {
+    "alertTo": "<alert-email-1>;<alert-email-2>",
+    "personas": [
+      { "objectId": "<entra-object-id-of-the-data-engineer>", "role": "Member", "label": "Data Engineer" },
+      { "objectId": "<entra-object-id-of-the-analyst>", "role": "Viewer", "label": "Analyst" }
+    ]
+  }
+}

@@ -29,7 +29,7 @@ The day before:
 
 - [ ] Laptop on the charger. Phone hotspot tested. The simulator talks AMQP over TLS (port 5671); if the campus network blocks that port, switch to the hotspot, because the simulator has no WebSocket option yet.
 - [ ] Three browser profiles signed in at `app.fabric.microsoft.com`: Hamza, Nacir, Omar. Azure portal open in Nacir's profile.
-- [ ] Terminal in `C:\Users\ultra pc\dev\gridpulse`: `az account show --query user.name` prints `<alert-email-1>`; `fab auth status` shows Hamza.
+- [ ] Terminal in `C:\Users\ultra pc\dev\gridpulse`: `az account show --query user.name` prints Hamza's UIR account; `fab auth status` shows Hamza.
 
 45 minutes before:
 

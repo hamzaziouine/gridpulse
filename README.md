@@ -82,6 +82,10 @@ charge and stops itself above 28 GB. MLflow runs go to `mlruns/` (git-ignored).
 
 ## Deploy (in this order)
 
+0. **Local settings**: `Copy-Item infra\local.settings.example.json infra\local.settings.json`
+   and fill in the subscription id, tenant id, alert e-mails and the Entra object ids of the
+   personas. The copy is git-ignored; the deploy scripts stop with a clear message when it is
+   missing (`deploy_fabric.ps1 -DryRun` falls back to the placeholders).
 1. **Azure foundation** (after the proposal is sent). Nacir (subscription Owner) first grants the
    Data Engineer, at the scope of `rg-hz2611-cdda`: Contributor, Resource Policy Contributor and
    Key Vault Secrets Officer (the vault is in RBAC mode, so its creator cannot write secrets

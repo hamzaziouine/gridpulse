@@ -5,9 +5,14 @@ $ErrorActionPreference = 'Stop'
 $Az = 'C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd'
 if (-not (Test-Path $Az)) { $Az = 'az' }
 
+# Subscription and tenant ids live in infra/local.settings.json (git-ignored); see
+# infra/local.settings.example.json. Loading throws a clear error when the file is missing.
+. "$PSScriptRoot\..\local_settings.ps1"
+$GpLocal = Get-GridPulseSettings -Section azure
+
 $Cfg = [ordered]@{
-    SubscriptionId = '<subscription-guid>'   # Azure for Students (owner: Mohamed NACIR)
-    TenantId       = '<tenant-guid>'   # UIR
+    SubscriptionId = $GpLocal.azure.subscriptionId   # infra/local.settings.json (git-ignored)
+    TenantId       = $GpLocal.azure.tenantId
     ResourceGroup  = 'rg-hz2611-cdda'
     Location       = 'germanywestcentral'
     KeyVault       = 'kv-hz2611-cdda'

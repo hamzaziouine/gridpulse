@@ -53,7 +53,8 @@ def computed(today: date) -> dict[str, Any]:
 
 def dry_run_ids() -> dict[str, Any]:
     ids = {t: f"00000000-0000-4000-8000-{i:012d}" for i, t in enumerate(ID_TOKENS, 1)}
-    return ids | {"ALERT_TO": "<alert-email-1>;<alert-email-2>"}
+    # Real addresses come from infra/local.settings.json through ids.local.json (deploy_fabric.ps1).
+    return ids | {"ALERT_TO": "alerts@example.com"}
 
 
 def render_text(text: str, values: dict[str, Any]) -> str:
