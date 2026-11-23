@@ -1,38 +1,45 @@
 # 8. Security and governance (report section 8, draft)
 
-Draft of 2026-11-22. Status at that date: in Azure only the resource group `rg-hz2611-cdda` and the budget `budget-cdda-20usd` exist (created 2026-11-06). Nothing exists in Fabric yet. The scripts and notebooks below were tested locally only. Every control has a status in section 8.8; a control is called "demonstrated in cloud" only once there is evidence for it in `docs/evidence/`.
+Draft, status of 2026-11-23. In Azure, `rg-hz2611-cdda` holds the Key Vault with two secrets, the SQL server and its free-offer database with the reference rows, and the two tag policies (`docs/evidence/azure_foundation.md`). In Fabric, `ws_gridpulse` exists with the Lakehouse, environment, notebooks, pipelines, an empty Eventstream and an Eventhouse with no data; the backfill and two daily runs succeeded (`docs/evidence/fabric_batch.md`). Roles as deployed are in `docs/evidence/rbac.md`. Every control has a status in section 8.8; a control is called "demonstrated in cloud" only once there is evidence for it in `docs/evidence/`.
 
 The brief (section 4) asks that security be visible in the architecture. In `docs/architecture.svg` it is the governance band at the bottom and the resource group box on the left.
 
 ## 8.1 Identities, personas and least privilege
 
-Every person signs in with their own UIR Entra ID account (tenant `uir.ac.ma`). No account is shared. Permissions are granted at four levels, because Azure and Fabric each have their own permission system:
+The subscription belongs to Nacir (Azure for Students). The Azure foundation (Key Vault, secrets, SQL server and database, policies, Nacir's Key Vault role) was deployed on 2026-11-23 from Hamza's laptop under Nacir's signed-in session, because no other member had a role yet. `[TO CONFIRM: Nacir's written agreement]` The Azure activity log therefore shows Nacir for those actions. From 2026-11-23 19:25 UTC, when Nacir assigned the roles of `docs/evidence/rbac.md`, Hamza works under his own UIR account (tenant `uir.ac.ma`) for Azure and Fabric, and every Fabric item was created under it. Sharing a session is not acceptable in production; we would use a service principal for deployments.
+
+The Fabric workspace runs on a trial capacity that belongs to a classmate outside the team, not to Nacir: his own trial was not visible from our accounts (`docs/evidence/fabric_batch.md`, section 1). None of us is capacity admin.
+
+Permissions are granted at four levels, because Azure and Fabric each have their own permission system:
 
 1. Azure RBAC on the resource group `rg-hz2611-cdda` (control plane: create, change, delete resources).
 2. Key Vault data-plane roles (the vault runs in RBAC mode, so there are no access policies).
-3. Azure SQL database roles (`db_datareader`, `db_datawriter`), granted to contained Entra users.
+3. Azure SQL database roles (`db_datareader`, `db_datawriter`), to be granted to contained Entra users (planned; none exists yet).
 4. Fabric workspace roles on `ws_gridpulse` (Admin, Member, Contributor, Viewer).
 
-### Permission matrix (decision 3 of PLAN section 9, accepted)
+### Permission matrix as deployed on 2026-11-23
+
+Read back on 2026-11-23 (`docs/evidence/rbac.md`). Cells marked "planned" were in the design but are not assigned.
 
 | Persona | Person | Azure RBAC, scope `rg-hz2611-cdda` | Key Vault `kv-hz2611-cdda` | Azure SQL `sqldb-hz2611-gridpulse` | Fabric `ws_gridpulse` |
 |---|---|---|---|---|---|
-| Admin | Mohamed NACIR | Owner (inherited: he owns the "Azure for Students" subscription) | Key Vault Administrator | Entra admin of `sql-hz2611-cdda` | Admin (owner of the trial capacity) |
-| Data Engineer | Hamza ZIOUINE | Contributor + Resource Policy Contributor | Key Vault Secrets Officer | `db_datareader` + `db_datawriter` | Member |
-| Analyst | Omar MOUNABBIH | Reader | none | none | Viewer (Contributor for a few days while he builds the report, then back to Viewer) |
-| Member 4, if one joins | to be confirmed | Reader | none | none | Viewer |
+| Admin | Mohamed NACIR | Owner (inherited: he owns the "Azure for Students" subscription) | Key Vault Secrets Officer (planned: Key Vault Administrator) | none (planned: Entra admin of `sql-hz2611-cdda`; `ad-admin list` is empty) | Member |
+| Data Engineer | Hamza ZIOUINE | Contributor + Resource Policy Contributor | Key Vault Secrets Officer | none (planned: `db_datareader` + `db_datawriter`; he connects as `gpadmin` with the password from Key Vault) | Admin (he created the workspace) |
+| Analyst | Omar MOUNABBIH | Reader | none | none | Viewer (planned: Contributor for a few days while he builds the report, then back to Viewer) |
+
+The proposal had a fourth member; nobody joined, so there is no fourth persona.
 
 Why each grant is the minimum we could find:
 
-- Admin. Nacir already holds Owner on the subscription and owns the Fabric trial; we cannot remove that. We therefore put every "grant access" power on him and keep him out of the daily building. Owner does not include Key Vault data access in RBAC mode, so he gets Key Vault Administrator explicitly. He is the only Entra admin of the SQL server.
-- Data Engineer. Contributor can create and delete resources in the RG but cannot assign roles (`Microsoft.Authorization/*/write` is excluded), so Hamza cannot raise his own rights or anyone else's. Contributor cannot write policy assignments either, so he gets Resource Policy Contributor on the RG only, to assign the two tag policies (section 8.4). Key Vault Secrets Officer lets him create and read secrets but not change who has access to the vault. In SQL he can read and write rows, not create users. In Fabric, Contributor would be enough to build every item; we gave Member so that he can share the report and manage the Analyst's access during the build. In production we would drop him to Contributor and let the Admin handle sharing.
+- Admin. Nacir already holds Owner on the subscription; we cannot remove that. We therefore put every "grant access" power on him in Azure. Owner does not include Key Vault data access in RBAC mode, so he got Key Vault Secrets Officer at RG scope before the first deployment (the design said Key Vault Administrator). The SQL Entra admin is not set yet. In Fabric he is a workspace Member, not Admin: Hamza created the workspace and the capacity is not Nacir's.
+- Data Engineer. Contributor can create and delete resources in the RG but cannot assign roles (`Microsoft.Authorization/*/write` is excluded), so Hamza cannot raise his own rights or anyone else's. Contributor cannot write policy assignments either, so he gets Resource Policy Contributor on the RG only, to assign the two tag policies (section 8.4). Key Vault Secrets Officer lets him create and read secrets but not change who has access to the vault. In SQL he can read and write rows, not create users. In Fabric he is workspace Admin, because the workspace creator becomes Admin and `deploy_fabric.ps1` never demotes the signed-in creator. This is more than the design gave him (Member). In production the Admin persona would create the workspace and the Engineer would be Contributor.
 - Analyst. Reader on the RG shows resource names and settings but no data. Reader gives no Key Vault data role, so `az keyvault secret show` returns 403 Forbidden for Omar; this is the negative test of PLAN T8.2. He has no SQL user and sees the gold tables only through the semantic model `sm_gridpulse` and the report `rpt_gridpulse`.
 
-How the matrix gets applied: Nacir runs the three `az role assignment create` commands and the provider registration of PLAN section 5.3 (the Entra object ids of Hamza and Omar are kept in the git-ignored `infra/local.settings.json`, template `infra/local.settings.example.json`), then the two `fab acl set` commands for the workspace. Not run yet. `[TODO after T8.1: docs/evidence/rbac.md with the output of az role assignment list -g rg-hz2611-cdda --include-inherited -o table and the workspace role assignments]`
+How the matrix gets applied: Nacir runs the three `az role assignment create` commands and the provider registration of PLAN section 5.3 (the Entra object ids of Hamza and Omar are kept in the git-ignored `infra/local.settings.json`, template `infra/local.settings.example.json`), then the two `fab acl set` commands for the workspace. Done on 2026-11-23: the RG roles at 19:25 to 19:26 UTC by Nacir, the workspace roles after `deploy_fabric.ps1` created the workspace. Output in `docs/evidence/rbac.md`.
 
 Two ordering constraints in the scripts:
 
-- `infra/azure/deploy.ps1` creates the vault in RBAC mode and then writes `sql-gpadmin-password` and `customer-hash-salt` in the same run. Creating a vault does not give the creator data-plane rights, so Hamza needs Key Vault Secrets Officer at RG scope before the first run (Nacir assigns it before the vault exists). Otherwise the script stops at step 2 and has to be re-run after the role is added.
+- `infra/azure/deploy.ps1` creates the vault in RBAC mode and then writes `sql-gpadmin-password` and `customer-hash-salt` in the same run. Creating a vault does not give the creator data-plane rights, so whoever runs it needs Key Vault Secrets Officer at RG scope before the first run. On 2026-11-23 the script ran under Nacir's session, so Nacir got that role first. Otherwise the script stops at step 2 and has to be re-run after the role is added.
 - `deploy.ps1` creates the SQL server without tags and tags it in a second call. Once the deny policies of section 8.4 are assigned, that create would be refused. Run `deploy.ps1` before `policy_assignments.ps1`, or pass the tags at creation.
 
 ### Non-human identities
@@ -108,10 +115,10 @@ What a trial tenant lets us show, and what not:
 
 ## 8.4 Policy and location
 
-- Allowed regions (inherited). The subscription carries the assignment `sys.regionrestriction` ("Allowed resource deployment regions"): switzerlandnorth, italynorth, denmarkeast, germanywestcentral, polandcentral. We use Germany West Central for every Azure resource (DESIGN D21) and chose the same region for the Fabric trial capacity. Azure Policy does not govern the Fabric trial region (the trial is not an Azure resource); we set it by hand in the Start-trial dialog.
+- Allowed regions (inherited). The subscription carries the assignment `sys.regionrestriction` ("Allowed resource deployment regions"): switzerlandnorth, italynorth, denmarkeast, germanywestcentral, polandcentral. We use Germany West Central for every Azure resource (DESIGN D21) and the Fabric trial capacity we use is in the same region. Azure Policy does not govern the Fabric trial region (the trial is not an Azure resource); its owner chose it when starting the trial.
 - Required tags (ours). `infra/azure/policy_assignments.ps1` assigns the built-in definition "Require a tag on resources" (`871b6d14-10aa-478d-b590-94f262ecfa99`, effect deny) twice at RG scope: `require-tag-project` and `require-tag-owner`. The script first checks that the definition's display name is the expected one, and skips assignments that already exist. Our resources carry `project=cdda-gridpulse`, `owner=hamza.ziouine`, `course=CDDA-2627` (`infra/azure/common.ps1`). The RG itself is already tagged; this definition applies to resources inside it.
 - Live denial demo: `powershell -File infra\azure\policy_assignments.ps1 -Test` tries to create the storage account `stgpulsepolicytest` without tags. Expected result: `RequestDisallowedByPolicy`, nothing created. A new assignment can take up to about 30 minutes to take effect; if the account does get created in that window, the script deletes it. `[TODO after T1A.5: output saved in docs/evidence/policy.md]`
-- The compliance view (`az policy state summarize`) stays empty until Nacir registers `Microsoft.PolicyInsights` (PLAN 5.3).
+- The compliance view (`az policy state summarize`) needs the `Microsoft.PolicyInsights` provider, registered on 2026-11-23 under Nacir's session.
 - Production: a "modify" policy that copies tags from the RG instead of denying, "Azure SQL should disable public network access", "Key Vault should use private link", assignments at management-group level, and the policy definitions kept in the repository.
 
 ## 8.5 Encryption and networking
@@ -148,8 +155,8 @@ Network exposure, and why it stays public here:
 | pipeline and notebook runs, durations, failures | Fabric Monitor hub (run history) | `pl_daily_ingest` failure path: Office 365 Outlook mail, then a Fail activity so the run stays marked Failed | designed (UI step T3.6) `[TODO after T3.6: screenshot of a test failure mail]` |
 | data quality | `silver_dq_results`, 17 checks per run (PASS / WARN / FAIL) | a FAIL makes `nb_silver` raise after writing the results and before overwriting silver, so the pipeline fails and sends the mail | tested locally: 14 PASS, 3 WARN, 0 FAIL |
 | abnormal live consumption | Eventhouse `meter_readings`, KQL Q2 | Activator `act_abnormal_demand`: mail when Q2 returns rows | designed `[TODO after T6.6: alert mail screenshot]` |
-| spend | Cost Management budget `budget-cdda-20usd` | mails at 50 % and 100 % of actual cost and 100 % of forecast cost, to Hamza and Nacir | in place since 2026-11-06 (spend 0.00 USD that day) |
-| Fabric capacity load and throttling | Fabric Capacity Metrics app (capacity admin = Nacir) | production: alert on sustained throttling | optional |
+| spend | Cost Management budget `budget-cdda-20usd` | mails at 50 % and 100 % of actual cost and 100 % of forecast cost, to Hamza and Nacir | in place since 2026-11-06 (spend 0.00 USD on 2026-11-06 and on 2026-11-23) |
+| Fabric capacity load and throttling | Fabric Capacity Metrics app (needs the capacity admin, who is the classmate owning the trial, not one of us) | production: alert on sustained throttling | optional |
 | user activity in Fabric (who opened which item) | Fabric events in the Microsoft Purview audit log | production | not available to us (needs audit admin rights) |
 
 ## 8.7 Cost and cleanup
@@ -162,28 +169,28 @@ Status values: designed (written down, nothing to run yet), scripted (code exist
 
 | Control | Status | Evidence |
 |---|---|---|
-| 3 personas, Azure RBAC on the RG | designed | PLAN 5.1 and 5.3. `[TODO after T8.1: docs/evidence/rbac.md]` |
-| Fabric workspace roles (Admin, Member, Viewer) | designed | `fab acl set` commands in PLAN 5.3. `[TODO after T1F.2]` |
+| 3 personas, Azure RBAC on the RG | in place in cloud (Key Vault Administrator and SQL Entra admin not assigned) | `docs/evidence/rbac.md` |
+| Fabric workspace roles (Admin, Member, Viewer) | in place in cloud (Hamza Admin, Nacir Member, Omar Viewer) | `docs/evidence/rbac.md` |
 | Analyst denied on Key Vault (403) | designed | `[TODO after T8.2: screenshot of az keyvault secret show as Omar]` |
 | Viewer cannot reach `bronze_customers` | designed, to verify | section 8.1, point 2. `[TODO after T8.2]` |
-| Key Vault in RBAC mode with `sql-gpadmin-password` and `customer-hash-salt` | scripted | `infra/azure/deploy.ps1` steps 1, 2 and 2b |
+| Key Vault in RBAC mode with `sql-gpadmin-password` and `customer-hash-salt` | demonstrated in cloud (2026-11-23) | `infra/azure/deploy.ps1` steps 1, 2 and 2b; `docs/evidence/azure_foundation.md` |
 | `es-meters-conn` in Key Vault | designed (manual `az keyvault secret set` after the UI copy) | PLAN T6.2, `infra/fabric/README.md` browser step 2 |
 | SQL password only read from Key Vault by tools | scripted (unit tests run `load_sql.py` against SQLite and in `--dry-run`) | `scripts/load_sql.py`, `infra/fabric/deploy_fabric.ps1` |
 | Simulator reads its connection string from Key Vault | scripted (dry-run mode tested locally) | `realtime/simulator.py` `connection_string()`, `tests/unit/test_simulator.py` |
-| `nb_silver` reads the salt from Key Vault | scripted (local run used the env-var fallback) | `src/gridpulse/lakehouse.py` `get_secret()` |
+| `nb_silver` reads the salt from Key Vault | demonstrated in cloud in pipeline runs started by Hamza (2026-11-23); not yet in a scheduled run | `src/gridpulse/lakehouse.py` `get_secret()`; `docs/evidence/fabric_batch.md` section 6 |
 | No secrets in Git | demonstrated locally | `tests/unit/test_repo_hygiene.py` |
 | SQL sensitivity classifications on 5 columns | scripted | `sql/001_schema.sql`. `[TODO after T2.2]` |
 | Pseudonymisation in silver + `pii_absent` check | demonstrated locally | local run 2026-11-22: `silver_customers_pseudo` 50 rows, `pii_absent` PASS |
 | Purview scan of Azure SQL and OneLake | designed | section 8.3 |
 | OneLake catalog Govern view, labels | designed | `[TODO after T8.6: screenshots]` |
 | Allowed regions | in place in cloud (inherited) | `az policy assignment list` on 2026-11-06 listed `sys.regionrestriction` |
-| Required tags `project` and `owner`, deny | scripted | `infra/azure/policy_assignments.ps1`. Done 2026-11-23: an untagged storage account was refused with `RequestDisallowedByPolicy` (`docs/evidence/azure_foundation.md`, section 2). |
+| Required tags `project` and `owner`, deny | demonstrated in cloud | `infra/azure/policy_assignments.ps1`. Done 2026-11-23: an untagged storage account was refused with `RequestDisallowedByPolicy` (`docs/evidence/azure_foundation.md`, section 2). |
 | TDE, OneLake encryption at rest | platform default | nothing to deploy; screenshot of the TDE blade `[TODO after T1A.2]` |
-| TLS 1.2 minimum on SQL | scripted | `deploy.ps1` step 3 |
-| SQL firewall (Azure services + laptop IP) | scripted | `deploy.ps1` step 4 |
+| TLS 1.2 minimum on SQL | in place in cloud | `deploy.ps1` step 3; `docs/evidence/azure_foundation.md` |
+| SQL firewall (Azure services + laptop IP) | in place in cloud (the laptop rule is named after the login that created it, `laptop-mohamed-nacir`) | `deploy.ps1` step 4 |
 | Activity log | platform default | `[TODO after T8.7: az monitor activity-log output]` |
 | Pipeline failure mail | designed | PLAN T3.6 |
-| Data-quality gate (17 checks, stop on FAIL) | demonstrated locally | `silver_dq_results` of the local run: 14 PASS, 3 WARN, 0 FAIL |
+| Data-quality gate (stop on FAIL) | demonstrated in cloud (no FAIL so far, so the stop path has not run in Fabric) | Fabric runs of 2026-11-23: 21 checks, 18 PASS, 3 WARN, 0 FAIL (`docs/evidence/fabric_batch.md`); local run of 2026-11-22: 17 checks, 14 PASS, 3 WARN, 0 FAIL |
 | Activator alert on Q2 | designed | `realtime/kql/q2_anomaly.kql`, PLAN T6.6 |
 | Budget alerts 50 / 100 / forecast 100 | in place in cloud | budget read back on 2026-11-06 (PLAN 1.3) |
 | Guarded cleanup | scripted | `infra/azure/cleanup.ps1` |
