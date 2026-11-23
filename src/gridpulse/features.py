@@ -10,9 +10,10 @@ Timeline for a target EST day T (24 hours, HE1..HE24):
   and checking that no feature moves.
 - Weather at the target hour is a forecast: the Historical Forecast API for training and the
   backtest, the Forecast API for live scoring (nb_predict). Limitation: the historical series
-  stitches the most recent model run for each hour (short lead time), so it is somewhat more
-  accurate than the 1 to 2 day ahead forecast available at 08:15 EST the day before. Live error
-  will be a bit higher.
+  stitches the most recent model run for each hour (short lead time), so it is more accurate
+  than the 1 to 2 day ahead forecast available at 08:15 EST the day before.
+  scripts/backtest_weather_lead.py measures the effect with Previous Runs weather
+  (gridpulse.weather_lead, docs/evidence/model_metrics.md).
 - Calendar facts come from calendar_features (civil date, Ontario holidays).
 
 The seasonal-naive baseline is the same hour one week earlier (`naive168`): it is known at issue

@@ -400,7 +400,7 @@ Results of the local run (real IESO and Open-Meteo data, `nb_forecast` executed 
 | Holdout, model frozen after 2025 | 2026-01-01 to 2026-11-05 | 7,411 | 2.70 % | 6.84 % | 458 MW | 60.5 % |
 | Backtest, retrained monthly | 2025-01-01 to 2026-11-05 | 16,169 | 2.45 % | 6.95 % | 416 MW | 64.8 % |
 
-Early stopping on 2025 chose 936 boosting rounds. Success criterion 6 (skill of at least 30 %) is met in both views, on historical data. July is the hardest month in both years (3.50 %): air-conditioning load follows temperature closely, so weather forecast error weighs most then. These numbers are optimistic for production for the reason given in 9.4.
+Early stopping on 2025 chose 936 boosting rounds. Success criterion 6 (skill of at least 30 %) is met in both views, on historical data. July is the hardest month in both years (3.50 %): air-conditioning load follows temperature closely, so weather forecast error weighs most then. These numbers use weather with a shorter lead than production has; scored with weather of the production lead time, the holdout MAPE is 3.07 % (section 9.4).
 
 ### 9.3 Tracking, registry and outputs
 
@@ -414,7 +414,15 @@ It then registers the model as `gridpulse_lgbm`. Predictions go to `gold_forecas
 
 ### 9.4 Limitations and monitoring needs
 
-- The Historical Forecast series stitches the most recent model run for each hour (short lead time), so it is a little more accurate than the 1 to 2 day ahead forecast available at 08:15 the day before. Live error will be somewhat higher than the backtest; the `live` rows in `gold_forecast` measure exactly that.
+- Weather lead time. Training and the table in 9.2 use the Historical Forecast series, which keeps the newest model run for each hour (a lead of a few hours). In production the forecast for day T is fetched on T-1 at 13:15 UTC, 23 to 46 hours before the target hours. We measured the gap with the Open-Meteo Previous Runs API, which archives what the same model (GFS) forecast one day and two days before each hour (`scripts/backtest_weather_lead.py`, full tables in `docs/evidence/model_metrics.md`). That archive is complete for our 9 variables only from December 2024, so the check covers target days from 2024-12-08 to 2026-11-05. With the weather of day T replaced by the closest match to the production lead (day 1 for HE1 to HE17, day 2 for HE18 to HE24):
+
+  | Evaluation | Naive MAPE | MAPE, short-lead weather | MAPE, production lead | Skill, production lead |
+  |---|---|---|---|---|
+  | Holdout 2026, frozen model | 6.84 % | 2.70 % | 3.07 % | 55.2 % |
+  | Backtest 2025-01 to 2026-11, retrained monthly | 6.96 % | 2.45 % | 2.74 % | 60.7 % |
+  | Holdout 2026, model retrained on lead-matched weather (from 2024-01-20) | 6.84 % | 2.83 % | 2.88 % | 58.0 % |
+
+  So the weather lead costs about 0.3 to 0.4 MAPE points, and with the longer day-2 lead on every hour the frozen model reaches 3.19 % on the holdout. Summer suffers most (backtest, July 2026: 3.50 % with short-lead weather, 4.10 % with the production lead). Training on lead-matched weather recovers most of the gap; the daily pipeline does not pull the Previous Runs data yet, so the registered model is still the one trained on short-lead weather. All of this is still a backtest: the `live` rows in `gold_forecast` will give the real figure once the pipeline runs in Fabric.
 - No probabilistic output (a single median forecast).
 - Monitoring we would add in production: live MAPE against the backtest MAPE and against the naive baseline every week; feature drift with a population stability index on temperature and lagged demand (the approach used in GridCast); retraining monthly, or earlier when live skill drops below the baseline.
 - The model stays secondary to the data platform, as the brief asks: it consumes silver and writes gold like any other notebook.
@@ -449,7 +457,7 @@ Cost drivers if this ran on paid capacity: the Fabric capacity size and its hour
 - The simulator runs on a laptop, so the live demo depends on that laptop and its network (AMQP port 5671).
 - One Lakehouse: workspace roles cannot separate bronze PII from gold (section 8).
 - Silver and gold are fully recomputed each run: fine at 68,784 hours, not at meter-level history.
-- Training weather is slightly better than live weather (section 9.4).
+- Training weather has a shorter lead than live weather; measured on 2026 this costs about 0.4 MAPE points (section 9.4).
 - Purview scanning, Key Vault and SQL audit logs, and private networking are designed, not built.
 - Six configuration steps exist only in the browser (section 11.3).
 

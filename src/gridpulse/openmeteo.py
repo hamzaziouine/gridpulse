@@ -23,6 +23,11 @@ import pandas as pd
 from gridpulse.config import CITIES, VARIABLES
 
 HISTORICAL_URL = "https://historical-forecast-api.open-meteo.com/v1/forecast"
+# Previous Runs API: the same model's forecast as issued about N days before each valid hour
+# (variables with the suffix `_previous_dayN`). Used only for the lead-matched backtest
+# (scripts/backtest_weather_lead.py); full coverage for gfs_seamless starts in January 2024.
+PREVRUNS_URL = "https://previous-runs-api.open-meteo.com/v1/forecast"
+PREVIOUS_DAYS = (1, 2)
 MODEL = "gfs_seamless"
 
 
@@ -40,15 +45,21 @@ def month_params(first: date, last: date) -> dict[str, str]:
     return base_params() | {"start_date": first.isoformat(), "end_date": last.isoformat()}
 
 
+def prevruns_params(first: date, last: date, days: Sequence[int] = PREVIOUS_DAYS) -> dict[str, str]:
+    hourly = ",".join(f"{v}_previous_day{d}" for d in days for v in VARIABLES)
+    return month_params(first, last) | {"hourly": hourly}
+
+
 def request_weight(n_locations: int, n_variables: int, n_days: float) -> float:
     """Open-Meteo's fractional call count for one request."""
     return n_locations * max(1.0, n_variables / 10) * max(1.0, n_days / 14)
 
 
-def parse_response(payload: Any) -> pd.DataFrame:
+def parse_response(payload: Any, suffix: str = "") -> pd.DataFrame:
     """Open-Meteo JSON (one object per city, in CITIES order) -> wide frame.
 
-    Columns: valid_time (UTC) + `<variable>_<city key>`. Missing values stay NaN.
+    Columns: valid_time (UTC) + `<variable>_<city key>`. Missing values stay NaN. With `suffix`
+    (e.g. `_previous_day1`), reads `<variable><suffix>` and drops the suffix from the names.
     """
     items = payload if isinstance(payload, list) else [payload]
     if len(items) != len(CITIES):
@@ -58,10 +69,12 @@ def parse_response(payload: Any) -> pd.DataFrame:
         if abs(item["latitude"] - city.lat) > 0.2 or abs(item["longitude"] - city.lon) > 0.2:
             raise ValueError(f"response order mismatch at {city.name}: {item['latitude']}")
         hourly = item["hourly"]
-        missing = [v for v in VARIABLES if v not in hourly]
+        missing = [v for v in VARIABLES if v + suffix not in hourly]
         if missing:
             raise ValueError(f"{city.name}: variables missing from response: {missing}")
-        part = pd.DataFrame({f"{v}_{city.key}": hourly[v] for v in VARIABLES}, dtype="float64")
+        part = pd.DataFrame(
+            {f"{v}_{city.key}": hourly[v + suffix] for v in VARIABLES}, dtype="float64"
+        )
         part.insert(0, "valid_time", pd.to_datetime(hourly["time"], utc=True))
         frame = part if frame is None else frame.merge(part, on="valid_time", how="outer")
     if frame is None:  # pragma: no cover - CITIES is never empty

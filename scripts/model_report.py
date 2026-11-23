@@ -8,6 +8,7 @@ scripts/run_local.py, so every number in the file comes from the last local trai
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -16,6 +17,82 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 TABLES = ROOT / "data" / "lakehouse" / "Tables"
 OUT = ROOT / "docs" / "evidence" / "model_metrics.md"
+LEAD = ROOT / "docs" / "evidence" / "weather_lead_backtest.json"
+WEATHER_NAMES = {
+    "historical": "Historical Forecast (lead of a few hours, as in training)",
+    "day1": "Previous Runs day 1 (about 24 to 30 h)",
+    "matched": "Lead-matched: day 1 for HE1..HE17, day 2 for HE18..HE24",
+    "day2": "Previous Runs day 2 (about 48 to 54 h)",
+}
+
+
+def lead_section() -> list[str]:
+    """Day-ahead weather lead check (scripts/backtest_weather_lead.py), if it has been run."""
+    if not LEAD.exists():
+        return []
+    data = json.loads(LEAD.read_text(encoding="utf-8"))
+    res = {(r["evaluation"], r["training"]): r for r in data["results"]}
+    lines = [
+        "## Scored with weather of the production lead time",
+        "",
+        "The tables above use Historical Forecast weather. In production the forecast for day T",
+        "is fetched on T-1 at 13:15 UTC, so the target hours are 23 to 46 h after the newest",
+        "model run. `scripts/backtest_weather_lead.py` replaces the weather of each target day",
+        "with the Open-Meteo Previous Runs API (same model gfs_seamless, same 5 cities and 9",
+        "variables), which keeps what the model forecast one day (day 1) and two days (day 2)",
+        "before each hour. Day T-1 and earlier keep the historical weather, as in `live_frame`.",
+        "The Previous Runs archive has all 9 variables only from 2024-12-07 (8 of them from",
+        "2024-01-20, snowfall later), so only target days from 2024-12-08 are scored here.",
+        f"Generated {data['generated_utc']} UTC.",
+        "",
+    ]
+    for (ev, training), title in (
+        (("holdout", "historical"), "Holdout 2026, model trained as above (Historical Forecast)"),
+        (("backtest", "historical"), "Monthly backtest, models trained as above"),
+        (("holdout", "matched"), "Holdout 2026, model retrained on lead-matched weather"),
+        (("backtest", "matched"), "Monthly backtest, models retrained on lead-matched weather"),
+    ):
+        r = res.get((ev, training))
+        if r is None:
+            continue
+        lines += [
+            f"**{title}**: {r['first']} to {r['last']}, {r['hours']:,} hours, "
+            f"{r['rounds']} rounds, seasonal naive MAPE {r['naive_mape_pct']:.2f} %.",
+            "",
+            "| Weather used for day T | Model MAPE % | MAE (MW) | Peak-hour APE % "
+            "| Skill vs naive % |",
+            "|---|---|---|---|---|",
+        ]
+        for w, m in r["weather"].items():
+            lines.append(f"| {WEATHER_NAMES[w]} | {m['mape_pct']:.2f} | {m['mae_mw']:.0f} | "
+                         f"{m['peak_ape_pct']:.2f} | {m['skill_vs_naive_pct']:.1f} |")  # fmt: skip
+        lines.append("")
+    lines += [
+        "How to read this:",
+        "",
+        "- The lead-matched row is the closest to production (the production lead runs from",
+        "  23 to 46 h; day 1 is a little shorter, day 2 longer, so they bracket it).",
+        "- The retrained model sees lead-matched weather only from 2024-01-20 (earlier years",
+        "  keep Historical Forecast weather, snowfall keeps it until 2024-12-07). Its round count",
+        "  comes from early stopping on 2025, which did not stop before the 3,000-round cap.",
+        "  Its 2025 backtest months are therefore slightly optimistic; its 2026 holdout is clean.",
+        "- 2025-05-01 is left out (IESO is missing one hour that day), which is why the",
+        "  backtest has one day less than the table at the top.",
+        "",
+    ]
+    months = data.get("monthly_backtest_matched", [])
+    if months:
+        lines += [
+            "Backtest by month, models trained as above:",
+            "",
+            "| Month | Historical weather MAPE % | Lead-matched weather MAPE % | Naive MAPE % |",
+            "|---|---|---|---|",
+        ]
+        lines += [f"| {m['month']} | {m['historical_mape_pct']:.2f} | "
+                  f"{m['matched_mape_pct']:.2f} | {m['naive_mape_pct']:.2f} |"
+                  for m in months]  # fmt: skip
+        lines.append("")
+    return lines
 
 
 def pct(x: float) -> str:
@@ -89,16 +166,16 @@ def main() -> None:
                      f"{int(lg['n_hours'])} |")  # fmt: skip
     lgb_rows = bt[bt["model"] == "lightgbm"].sort_values("mape_pct", ascending=False).head(3)
     worst = ", ".join(f"{r.month_start:%Y-%m} ({r.mape_pct:.2f} %)" for r in lgb_rows.itertuples())
+    lines.append("")
+    lines += lead_section()
     lines += [
-        "",
         "## Limitations",
         "",
-        "- Weather inputs come from the Open-Meteo Historical Forecast API, which keeps the most",
-        "  recent model run for each hour (lead time of a few hours). In production the input is",
-        "  the forecast available at 08:15 EST the day before, about 16 to 39 hours ahead of the",
-        "  target hours, which is less accurate, so live error",
-        "  will be higher than the table above. Live rows (`split = 'live'` in `gold_forecast`)",
-        "  measure that once the daily pipeline runs in Fabric.",
+        "- Weather inputs of the tables at the top come from the Open-Meteo Historical Forecast",
+        "  API (lead of a few hours). The section above measures the effect of the longer lead",
+        "  used in production on 2024-12 to 2026-11 only, because the Previous Runs archive is",
+        "  not complete before. Live rows (`split = 'live'` in `gold_forecast`) measure the real",
+        "  error once the daily pipeline runs in Fabric.",
         f"- Hardest months in the backtest: {worst}.",
         "  Summer air-conditioning load swings with temperature, so weather forecast error",
         "  matters most then.",
