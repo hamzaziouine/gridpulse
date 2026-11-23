@@ -1,6 +1,6 @@
 """Profile the raw IESO and Open-Meteo files -> docs/data_profile.md (report section 3 evidence).
 
-    uv run python scripts/profile_data.py
+uv run python scripts/profile_data.py
 """
 
 from __future__ import annotations

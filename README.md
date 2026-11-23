@@ -73,7 +73,7 @@ uv run python scripts/run_local.py --steps forecast           # train, backtest,
 uv run python scripts/run_local.py --steps predict --run-date 2026-11-03
 uv run python scripts/model_report.py      # docs/evidence/model_metrics.md
 uv run pytest                              # unit + Spark tests (Spark tests skip without a JDK 17)
-uv run ruff check . ; uv run python scripts/check_text.py
+uv run ruff check . ; uv run ruff format --check . ; uv run python scripts/check_text.py
 ```
 
 `run_local.py` executes the real notebook files with a local SparkSession and writes Parquet

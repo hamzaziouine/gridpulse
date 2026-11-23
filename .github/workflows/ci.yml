@@ -27,6 +27,8 @@ jobs:
         run: uv sync --all-groups --frozen
       - name: Lint
         run: uv run ruff check .
+      - name: Format
+        run: uv run ruff format --check .
       - name: No em or en dashes
         run: uv run python scripts/check_text.py
       - name: Tests

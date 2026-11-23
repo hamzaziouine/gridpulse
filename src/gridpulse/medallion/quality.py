@@ -80,9 +80,9 @@ def check_demand(bronze: DataFrame, silver: DataFrame, run_date: date) -> list[C
         F.count("*").alias("n"),
         F.countDistinct("target_time").alias("n_distinct"),
         F.max("est_date").alias("dmax"),
-        F.sum(
-            (~F.col("ontario_demand_mw").between(*DEMAND_RANGE_MW)).cast("int")
-        ).alias("out_of_range"),
+        F.sum((~F.col("ontario_demand_mw").between(*DEMAND_RANGE_MW)).cast("int")).alias(
+            "out_of_range"
+        ),
     ).first()
     n_bronze_valid = bronze.where(valid_demand_rows()).count()
     out.append(_r(t, "revisions_deduplicated", True, n_bronze_valid - stats["n"], "info",
@@ -111,8 +111,10 @@ def check_demand(bronze: DataFrame, silver: DataFrame, run_date: date) -> list[C
                   shown, warn=not unknown))  # fmt: skip
 
     # Days that do not have 24 hours, except the newest day (IESO posts it hour by hour).
-    per_day = silver.groupBy("est_date").count().where(
-        (F.col("count") != 24) & (F.col("est_date") < stats["dmax"])
+    per_day = (
+        silver.groupBy("est_date")
+        .count()
+        .where((F.col("count") != 24) & (F.col("est_date") < stats["dmax"]))
     )
     short_days = [r["est_date"] for r in per_day.orderBy("est_date").collect()]
     known_days = {est_date(g) for g in KNOWN_DEMAND_GAPS}  # the EST day, not the UTC date
@@ -177,17 +179,26 @@ def check_reference(
     bad_status = meters_silver.where(
         ~F.col("status").isin("active", "maintenance", "retired")
     ).count()
-    leaked = sorted(
-        set(PII_COLUMNS) & (set(customers_pseudo.columns) | set(meters_silver.columns))
-    )
+    leaked = sorted(set(PII_COLUMNS) & (set(customers_pseudo.columns) | set(meters_silver.columns)))
     return [
         _r("silver_meters", "fk_site", orphan_site == 0, orphan_site, "0 orphan meters"),
         _r("silver_meters", "fk_customer", orphan_cust == 0, orphan_cust, "0 orphan meters"),
-        _r("silver_meters", "status_domain", bad_status == 0, bad_status,
-           "active|maintenance|retired"),  # fmt: skip
+        _r(
+            "silver_meters",
+            "status_domain",
+            bad_status == 0,
+            bad_status,
+            "active|maintenance|retired",
+        ),
         _r("bronze_customers", "email_unique", dup_email == 0, dup_email, "0 duplicates"),
-        _r("silver_customers_pseudo", "pii_absent", not leaked, len(leaked),
-           "no PII column in silver", ", ".join(leaked)),  # fmt: skip
+        _r(
+            "silver_customers_pseudo",
+            "pii_absent",
+            not leaked,
+            len(leaked),
+            "no PII column in silver",
+            ", ".join(leaked),
+        ),
     ]
 
 

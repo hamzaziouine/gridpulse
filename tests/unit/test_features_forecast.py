@@ -132,8 +132,10 @@ def test_live_frame_uses_forecast_weather_and_hides_target_demand() -> None:
     day_start = pd.Timestamp("2025-02-05 05:00", tz="UTC")
     known = pd.to_datetime(hist["target_time"], utc=True) < day_start - pd.Timedelta(hours=24)
     history = hist[known]  # demand and weather up to T-2
-    fcw = hist[~known & (pd.to_datetime(hist["target_time"], utc=True) < day_start
-                         + pd.Timedelta(hours=24))].rename(columns={"target_time": "valid_time"})
+    fcw = hist[
+        ~known
+        & (pd.to_datetime(hist["target_time"], utc=True) < day_start + pd.Timedelta(hours=24))
+    ].rename(columns={"target_time": "valid_time"})
     fcw = fcw.drop(columns=["ontario_demand_mw"]).assign(temperature_2m_w=-30.0)
     frame, source = fx.live_frame(history, fcw, target)
     assert source == "forecast_api"

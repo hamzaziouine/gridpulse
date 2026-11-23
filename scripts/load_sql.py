@@ -182,9 +182,12 @@ def main(argv: list[str] | None = None) -> int:
     if a.sqlite:
         conn = sqlite3.connect(a.sqlite)
         conn.execute("PRAGMA foreign_keys = ON")
-        if a.schema or not conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sites'"
-        ).fetchone():
+        if (
+            a.schema
+            or not conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sites'"
+            ).fetchone()
+        ):
             for s in sqlite_ddl():
                 conn.execute(s)
         print(f"inserted {load(conn, rows)}; verified {verify(conn)} in {a.sqlite}")

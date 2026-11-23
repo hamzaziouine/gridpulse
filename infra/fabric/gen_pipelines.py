@@ -208,15 +208,24 @@ def backfill() -> dict:
     end = (f"if(greater(ticks({m_end}), ticks({yday})), formatDateTime({yday}, 'yyyy-MM-dd'), "
            f"formatDateTime({m_end}, 'yyyy-MM-dd'))")  # fmt: skip
     om = http_copy(
-        "cp_openmeteo_month", [], "{{CONN_OPENMETEO_HIST}}",
+        "cp_openmeteo_month",
+        [],
+        "{{CONN_OPENMETEO_HIST}}",
         f"@concat('v1/forecast?{OM_Q}&start_date=', formatDateTime({m0}, 'yyyy-MM-dd'), "
         f"'&end_date=', {end})",
-        "bronze/openmeteo", f"@concat(formatDateTime({m0}, 'yyyy-MM'), '.json')",
-        "One calendar month of the Historical Forecast API (capped at yesterday).")
+        "bronze/openmeteo",
+        f"@concat(formatDateTime({m0}, 'yyyy-MM'), '.json')",
+        "One calendar month of the Historical Forecast API (capped at yesterday).",
+    )
     ieso = http_copy(
-        "cp_ieso_year", [], "{{CONN_IESO_HTTP}}", "@concat('PUB_Demand_', string(item()), '.csv')",
-        "bronze/ieso", "@concat('PUB_Demand_', string(item()), '.csv')",
-        "One year of IESO PUB_Demand.")
+        "cp_ieso_year",
+        [],
+        "{{CONN_IESO_HTTP}}",
+        "@concat('PUB_Demand_', string(item()), '.csv')",
+        "bronze/ieso",
+        "@concat('PUB_Demand_', string(item()), '.csv')",
+        "One year of IESO PUB_Demand.",
+    )
     acts = [
         set_var("set_run_date", "v_run_date", "@formatDateTime(utcNow(), 'yyyy-MM-dd')", []),
         {"name": "fe_ieso_years", "type": "ForEach", "dependsOn": [dep("set_run_date")],
