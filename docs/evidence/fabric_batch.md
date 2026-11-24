@@ -24,7 +24,8 @@ Etiquette on a shared capacity: one backfill, one scheduled run a day, no loops.
 | `es_meters` | Eventstream | `deploy_fabric.ps1` | empty: no source, no destination yet (browser step) |
 | `exp_gridpulse_forecast` | ML experiment | `nb_forecast` | |
 | `gridpulse_lgbm` | ML model | `nb_forecast` | version 1 used by `nb_predict` |
-| `nb_forecast` | ML experiment | Fabric, automatically | the notebook's default experiment, not used by our code |
+
+Fabric autologging also created an experiment named `nb_forecast` during the backfill, holding the backtest fits. It was deleted on 2026-11-24 and autologging is now off in `nb_forecast`, so a new backfill does not recreate it.
 
 Connections (tenant level, outside the workspace): `con_ieso_http`, `con_openmeteo_hist`, `con_openmeteo_fc`, `con_openmeteo_prev` (HTTP, anonymous) and `con_sql_gridpulse` (SQL, basic auth with the `gpadmin` password from Key Vault, encrypted). `con_outlook_alerts` does not exist yet.
 

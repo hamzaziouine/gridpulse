@@ -59,7 +59,7 @@ GUID_RE = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
 # Public Azure built-in policy definition "Require a tag on resources".
 ALLOWED_GUIDS = {"871b6d14-10aa-478d-b590-94f262ecfa99"}
-ALLOWED_MAIL_DOMAINS = ("example.com", "onelake.dfs.fabric.microsoft.com", "anthropic.com")
+ALLOWED_MAIL_DOMAINS = ("example.com", "onelake.dfs.fabric.microsoft.com")
 
 
 def _texts() -> list[tuple[str, str]]:

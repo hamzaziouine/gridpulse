@@ -106,6 +106,9 @@ TRAIN_WEATHER = str(train_weather).strip().lower()
 if TRAIN_WEATHER not in ("matched", "historical"):
     raise ValueError(f"train_weather must be 'matched' or 'historical', got {train_weather!r}")
 print(f"gridpulse {gridpulse.__version__} | run_date {RUN_DATE} | mlflow {mlflow.__version__}")
+# Fabric autologging would put every backtest fit into a default experiment named after
+# the notebook. Only the explicit run in exp_gridpulse_forecast below is wanted.
+mlflow.autolog(disable=True)
 
 # METADATA ********************
 
