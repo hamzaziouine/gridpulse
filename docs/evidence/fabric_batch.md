@@ -1,6 +1,6 @@
 # Fabric batch path: deployment and run evidence (2026-11-23)
 
-What exists in Fabric and what the batch runs did, as read back on 2026-11-23 with `fab` and the Fabric REST API, signed in as Hamza. Idempotency counts are in `docs/evidence/idempotency.md`. Job and run ids are shortened to their first 8 characters.
+What exists in Fabric and what the batch runs did, as read back on 2026-11-23 with `fab` and the Fabric REST API, signed in as Hamza. The scheduled run of 2026-11-24 was read back on 2026-11-24. Idempotency counts are in `docs/evidence/idempotency.md`. Job and run ids are shortened to their first 8 characters.
 
 ## 1. Capacity
 
@@ -33,7 +33,7 @@ Not built yet: the KQL queryset, `rtd_gridpulse`, `act_abnormal_demand`, `sm_gri
 
 ## 3. Schedule
 
-One schedule on `pl_daily_ingest` (`fab job run-list ... --schedule`): enabled, daily at 13:15, time zone UTC, from 2026-11-24 00:00 to 2026-12-17 00:00. It has not fired yet at the time of writing. With no failure mail, a failed scheduled run is visible only in the Monitor hub.
+One schedule on `pl_daily_ingest` (`fab job run-list ... --schedule`): enabled, daily at 13:15, time zone UTC, from 2026-11-24 00:00 to 2026-12-17 00:00. It fired for the first time on 2026-11-24 at 13:15:04 UTC (job instance `c5e1df2b`, Completed at 13:40:09 UTC; counts in `docs/evidence/idempotency.md`, section 5). With no failure mail, a failed scheduled run is visible only in the Monitor hub.
 
 ## 4. Backfill run (`pl_backfill`)
 
@@ -82,7 +82,7 @@ Run 1 (`55454d4a`) took about 24 min. Most of a daily run is notebook time; the 
 
 The 18 other checks passed, among them `pii_absent` on `silver_customers_pseudo`, `fk_site` and `fk_customer` on `silver_meters`, and the 4 Previous Runs checks (coverage: day 1 has 17,190 complete hours from 2024-12-06 18Z to 2026-11-22 23Z, day 2 has 17,166). `freshness_days` saw newest EST date 2026-11-23.
 
-`nb_silver` read `customer-hash-salt` from Key Vault in Fabric in a pipeline run started by Hamza (`silver_customers_pseudo` has 50 rows). A scheduled run has not happened yet.
+`nb_silver` read `customer-hash-salt` from Key Vault in Fabric in a pipeline run started by Hamza (`silver_customers_pseudo` has 50 rows). The scheduled run of 2026-11-24 did the same: `silver_customers_pseudo` commit 3 was written at 13:28:26 UTC inside that run, 50 rows.
 
 ## 7. Model metrics from the cloud run
 
@@ -99,8 +99,6 @@ Skill against the naive baseline (1 - MAPE model / MAPE naive): 58.1 % on the ho
 
 ## 8. Not verified yet
 
-- The first scheduled run (2026-11-24 13:15 UTC).
-- `Files/bronze/openmeteo_forecast`: the daily copy succeeded and `bronze_openmeteo_forecast` has 360 rows, but the folder listing was not checked.
 - Eventstream, Eventhouse ingestion and KQL on stream data (no event sent yet).
 - Failure mail (no Outlook connection).
 - Power BI semantic model and report (not built).

@@ -11,9 +11,9 @@ Technical report
 | Team | Hamza ZIOUINE, Mohamed NACIR, Omar MOUNABBIH (the fourth member of the proposal never joined) `[TO CONFIRM: fourth member out for good]` |
 | Repository | https://github.com/hamzaziouine/gridpulse |
 | Date | `[TODO: submission date]` |
-| Version | draft of 2026-11-23 |
+| Version | draft of 2026-11-24 |
 
-Status of this draft (2026-11-23). Azure: Key Vault, the Azure SQL free-offer database with the reference data, and the two tag policies with their live denial test are deployed (`docs/evidence/azure_foundation.md`). Fabric: the workspace `ws_gridpulse` runs on a trial capacity that belongs to a classmate outside the team; the backfill and two daily runs of the batch pipeline succeeded, with identical row counts for the same date (`docs/evidence/fabric_batch.md`, `docs/evidence/idempotency.md`). Not verified yet: the real-time path (no event sent, no KQL run on stream data), Power BI (not built), the failure mail, and the first scheduled run (2026-11-24 13:15 UTC). Every number below says where it was measured: "local" means the laptop run with data to 2026-11-06, "cloud" means Fabric with data to 2026-11-22. The two are never mixed in one figure. Open items are marked `[TODO ...]`, `[TO CONFIRM ...]` or `[TO DECIDE ...]`.
+Status of this draft (2026-11-24). Azure: Key Vault, the Azure SQL free-offer database with the reference data, and the two tag policies with their live denial test are deployed (`docs/evidence/azure_foundation.md`). Fabric: the workspace `ws_gridpulse` runs on a trial capacity that belongs to a classmate outside the team; the backfill and two daily runs of the batch pipeline succeeded, with identical row counts for the same date, and the first scheduled run on 2026-11-24 completed and added exactly one new day (`docs/evidence/fabric_batch.md`, `docs/evidence/idempotency.md`). Not verified yet: the real-time path (no event sent, no KQL run on stream data), Power BI (not built) and the failure mail. Every number below says where it was measured: "local" means the laptop run with data to 2026-11-06, "cloud" means Fabric with data to 2026-11-22. The two are never mixed in one figure. Open items are marked `[TODO ...]`, `[TO CONFIRM ...]` or `[TO DECIDE ...]`.
 
 ---
 
@@ -46,11 +46,11 @@ Results so far:
 | Data-quality checks | 21 checks (17 + 4 on the Previous Runs weather): 18 PASS, 3 WARN (known conditions), 0 FAIL | cloud, 2026-11-23 |
 | Notebook run times | nb_bronze 9 s, nb_silver 26 s, nb_gold 15 s on a laptop (2 cores) | local run |
 | Notebook run times | daily run: nb_bronze 286 s, nb_silver 489 s, nb_gold 338 s, nb_predict 263 s; backfill nb_forecast 1,121 s (Spark session start included) | cloud, 2026-11-23 (`docs/evidence/fabric_batch.md`) |
-| Pipeline runs twice without duplicates (success criterion 1) | met for two runs of the same `run_date`: all 30 table counts identical; the multi-day test (first scheduled run, 2026-11-24) is pending | cloud, 2026-11-23 (`docs/evidence/idempotency.md`) |
+| Pipeline runs twice without duplicates (success criterion 1) | met: two runs of the same `run_date` gave identical counts in all 30 tables, and the first scheduled run (2026-11-24) added one day (+24 demand hours, 48 `live` forecast rows, no duplicate) | cloud, 2026-11-23 and 2026-11-24 (`docs/evidence/idempotency.md`) |
 | Live events visible within 10 s, anomaly flagged (criterion 3) | `[TODO after T6.4]` | Fabric |
 | Forecast beats seasonal-naive MAPE by at least 30 % (criterion 6) | met on history, scored with the closest archived lead to the production lead: holdout 2026 MAPE 2.90 % vs 6.84 % (skill 57.6 %), monthly backtest 2.56 % vs 6.95 % (skill 63.1 %) | local run, data to 2026-11-06 |
-| Same criterion, cloud | holdout 2026 MAPE 2.815 % vs 6.724 % over 7,819 h (skill 58.1 %), monthly backtest 2.546 % vs 6.895 % over 16,577 h (skill 63.1 %); 24 live rows written for 2026-11-24, not yet scored | cloud, data to 2026-11-22 (`docs/evidence/fabric_batch.md`) |
-| Key Vault and Azure Policy demonstrated (criterion 5) | Azure part done: secrets generated into `kv-hz2611-cdda` and read back by `load_sql.py`; an untagged resource refused with `RequestDisallowedByPolicy`. Fabric part: `nb_silver` read the salt from Key Vault in the pipeline runs started by Hamza; not yet in a scheduled run | Azure and cloud, 2026-11-23, `docs/evidence/azure_foundation.md`, `docs/evidence/fabric_batch.md` |
+| Same criterion, cloud | holdout 2026 MAPE 2.815 % vs 6.724 % over 7,819 h (skill 58.1 %), monthly backtest 2.546 % vs 6.895 % over 16,577 h (skill 63.1 %); 24 live rows written for 2026-11-24, 48 after the scheduled run of 2026-11-24 (EST days 2026-11-24 and 2026-11-25), not yet scored | cloud, data to 2026-11-22 (`docs/evidence/fabric_batch.md`) |
+| Key Vault and Azure Policy demonstrated (criterion 5) | Azure part done: secrets generated into `kv-hz2611-cdda` and read back by `load_sql.py`; an untagged resource refused with `RequestDisallowedByPolicy`. Fabric part: `nb_silver` read the salt from Key Vault in the pipeline runs started by Hamza and in the scheduled run of 2026-11-24 | Azure and cloud, 2026-11-23 and 2026-11-24, `docs/evidence/azure_foundation.md`, `docs/evidence/fabric_batch.md` |
 
 Team and contributions (planned). All commits in the repository so far are by one author, Hamza ZIOUINE. The parts listed for Nacir and Omar below are planned; they have not built them yet. `[TO CONFIRM: final table from facts and git log at submission]`
 
@@ -101,12 +101,12 @@ Prior work. Part of the code comes from GridCast, an earlier personal project of
 
 | # | Requirement | Acceptance (proposal success criteria) | Status |
 |---|---|---|---|
-| FR1 | Load S1 to S3 every day into the Lakehouse | pipeline runs end to end twice with no duplicate rows | cloud: two runs for the same date, identical counts (`docs/evidence/idempotency.md`); daily schedule from 2026-11-24, first scheduled run pending |
+| FR1 | Load S1 to S3 every day into the Lakehouse | pipeline runs end to end twice with no duplicate rows | cloud: two runs for the same date, identical counts; first scheduled run 2026-11-24 completed (`docs/evidence/idempotency.md`) |
 | FR2 | Clean, join and aggregate into curated Delta tables with quality checks | gold refreshed by the Spark notebooks during the demo; checks stored per run | tested locally; cloud: Delta tables written in Fabric, `silver_dq_results` stored per run |
 | FR3 | Ingest live meter events and analyse them with KQL | events in the Eventhouse within 10 s; Q1 and Q2 return results; injected anomaly flagged | not verified: Eventhouse table created (0 rows), Eventstream empty, KQL written; `[TODO after T6.3, T6.4]` |
 | FR4 | Report for the business questions | at least 4 visuals, 3 KPIs, slicers; Q1 to Q4 answered | spec written; `[TODO after T7.2]` |
 | FR5 | Day-ahead forecast with tracked experiments | beats seasonal-naive MAPE by at least 30 % | met on history. Local: skill 57.6 % holdout, 63.1 % backtest. Cloud: 58.1 % holdout, 63.1 % backtest; experiment and registered model exist in Fabric |
-| FR6 | Security controls | Key Vault and Azure Policy demonstrated live | Key Vault + Policy done in Azure on 2026-11-23 (`docs/evidence/azure_foundation.md`); Fabric secret read done in pipeline runs started by Hamza on 2026-11-23 (`docs/evidence/fabric_batch.md`); scheduled run pending |
+| FR6 | Security controls | Key Vault and Azure Policy demonstrated live | Key Vault + Policy done in Azure on 2026-11-23 (`docs/evidence/azure_foundation.md`); Fabric secret read done in pipeline runs started by Hamza on 2026-11-23 and in the scheduled run of 2026-11-24 (`docs/evidence/fabric_batch.md`) |
 | FR7 | Cost control and cleanup | all resources deleted or paused after the demo, listed in the inventory | scripted (`cleanup.ps1`), `docs/resource_inventory.md` |
 
 Non-functional requirements: cost under the $20 monthly budget alert; every resource in Germany West Central (allowed by the subscription policy); the whole platform rebuildable from the repository (section 11); source licences respected (`NOTICE.md`: no bulk IESO files in Git, Open-Meteo attribution under CC BY 4.0).
@@ -116,7 +116,7 @@ Non-functional requirements: cost under the $20 monthly budget alert; every reso
 | Minimum | GridPulse | Status |
 |---|---|---|
 | 2 or more heterogeneous sources | 4 (CSV over HTTP, JSON over REST, relational SQL, event stream) | cloud: S1 to S3 landed in the Lakehouse by the pipelines (2026-11-23); S4: simulator tested locally in dry run only, no event sent to Fabric |
-| 1 or more batch pipeline | `pl_daily_ingest` (daily), `pl_backfill` (one-off) | cloud: deployed and run (backfill once, daily twice) |
+| 1 or more batch pipeline | `pl_daily_ingest` (daily), `pl_backfill` (one-off) | cloud: deployed and run (backfill once, daily twice by hand and once on schedule) |
 | 1 or more Lakehouse with documented layers | `lh_gridpulse`, bronze / silver / gold | cloud: `lh_gridpulse` with 7 bronze, 10 silver, 13 gold tables |
 | 1 or more Spark notebook writing Delta | `nb_bronze`, `nb_silver`, `nb_gold`, `nb_forecast`, `nb_predict` | cloud: all five ran in Fabric and wrote 30 Delta tables; locally with a Parquet stand-in |
 | 1 or more stream into Eventstream and Eventhouse | simulator → `es_meters` → `eh_gridpulse` | not verified: items exist in Fabric, no event sent yet; simulator dry-run tested locally |
@@ -264,7 +264,7 @@ Definition: `fabric/pl_daily_ingest.DataPipeline/pipeline-content.json`, generat
 
 Schedule: daily at 13:15 UTC (08:15 EST; IESO posts the previous day at about 07:30 EST). `pl_backfill` (11 activities) copies every IESO year, every Open-Meteo Historical Forecast month since 2019 and every Previous Runs month since 2024-01, runs bronze with `full_refresh = true`, then silver, gold and `nb_forecast` (with `train_weather = matched`).
 
-Status (cloud, 2026-11-23): both pipelines deployed by `deploy_fabric.ps1`. `pl_backfill` ran once in 63.5 min (copies 28.5 min, set by the 95 sequential Open-Meteo months); `pl_daily_ingest` ran twice by hand for `run_date` 2026-11-23, about 24 and 25 min, with identical row counts in all 30 tables (`docs/evidence/idempotency.md`). Activity durations are in `docs/evidence/fabric_batch.md`. The deployed pipelines have no `mail_failure` activity yet, because `con_outlook_alerts` (browser step) does not exist. The schedule starts on 2026-11-24. `[TODO after T3.3: screenshot of a green run in the Monitor hub]`
+Status (cloud, 2026-11-23 and 2026-11-24): both pipelines deployed by `deploy_fabric.ps1`. `pl_backfill` ran once in 63.5 min (copies 28.5 min, set by the 95 sequential Open-Meteo months); `pl_daily_ingest` ran twice by hand for `run_date` 2026-11-23, about 24 and 25 min, with identical row counts in all 30 tables (`docs/evidence/idempotency.md`). Activity durations are in `docs/evidence/fabric_batch.md`. The deployed pipelines have no `mail_failure` activity yet, because `con_outlook_alerts` (browser step) does not exist. The schedule fired for the first time on 2026-11-24 at 13:15 UTC and that run completed (`docs/evidence/idempotency.md`, section 5). `[TODO after T3.3: screenshot of a green run in the Monitor hub]`
 
 ### 5.2 Code organisation
 
@@ -589,13 +589,13 @@ Deliverable 7: `docs/resource_inventory.md` lists every planned Azure and Fabric
 
 ## Appendix A. Evidence still to collect
 
-Already in `docs/evidence/`: `azure_foundation.md` (Azure deployment, policy `-Test`, SQL load and classifications), `rbac.md` (roles as deployed), `fabric_batch.md` (Fabric items, run durations, DQ results, cloud model metrics), `idempotency.md` (two runs of the same date) and `model_metrics.md` (local model metrics).
+Already in `docs/evidence/`: `azure_foundation.md` (Azure deployment, policy `-Test`, SQL load and classifications), `rbac.md` (roles as deployed), `fabric_batch.md` (Fabric items, run durations, DQ results, cloud model metrics), `idempotency.md` (two runs of the same date and the first scheduled run) and `model_metrics.md` (local model metrics).
 
 | Evidence | Task | Report section |
 |---|---|---|
 | Omar's 403 on Key Vault, Viewer access test on `bronze_customers` | T8.2 | 8 |
 | SQL classification screenshot | T2.2 | 3, 8 |
-| Pipeline run screenshots (Monitor hub); result of the first scheduled run in `docs/evidence/idempotency.md`, section 4 | T3.3, T3.4 | 5 |
+| Pipeline run screenshots (Monitor hub) | T3.3, T3.4 | 5 |
 | Failure mail screenshot | T3.6 | 8 |
 | Lakehouse table list and notebook snapshot screenshots | T4.2 | 5 |
 | MLflow screenshots in Fabric; live MAPE once actual demand is published | T5.1 | 9 |

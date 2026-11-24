@@ -1,6 +1,6 @@
 # 8. Security and governance (report section 8, draft)
 
-Draft, status of 2026-11-23. In Azure, `rg-hz2611-cdda` holds the Key Vault with two secrets, the SQL server and its free-offer database with the reference rows, and the two tag policies (`docs/evidence/azure_foundation.md`). In Fabric, `ws_gridpulse` exists with the Lakehouse, environment, notebooks, pipelines, an empty Eventstream and an Eventhouse with no data; the backfill and two daily runs succeeded (`docs/evidence/fabric_batch.md`). Roles as deployed are in `docs/evidence/rbac.md`. Every control has a status in section 8.8; a control is called "demonstrated in cloud" only once there is evidence for it in `docs/evidence/`.
+Draft, status of 2026-11-24. In Azure, `rg-hz2611-cdda` holds the Key Vault with two secrets, the SQL server and its free-offer database with the reference rows, and the two tag policies (`docs/evidence/azure_foundation.md`). In Fabric, `ws_gridpulse` exists with the Lakehouse, environment, notebooks, pipelines, an empty Eventstream and an Eventhouse with no data; the backfill, two daily runs by hand and the first scheduled run (2026-11-24) succeeded (`docs/evidence/fabric_batch.md`). Roles as deployed are in `docs/evidence/rbac.md`. Every control has a status in section 8.8; a control is called "demonstrated in cloud" only once there is evidence for it in `docs/evidence/`.
 
 The brief (section 4) asks that security be visible in the architecture. In `docs/architecture.svg` it is the governance band at the bottom and the resource group box on the left.
 
@@ -177,7 +177,7 @@ Status values: designed (written down, nothing to run yet), scripted (code exist
 | `es-meters-conn` in Key Vault | designed (manual `az keyvault secret set` after the UI copy) | PLAN T6.2, `infra/fabric/README.md` browser step 2 |
 | SQL password only read from Key Vault by tools | demonstrated in cloud (2026-11-23): `load_sql.py` loaded Azure SQL that way (`docs/evidence/azure_foundation.md`, section 3) and `deploy_fabric.ps1` created `con_sql_gridpulse` that way | `scripts/load_sql.py`, `infra/fabric/deploy_fabric.ps1` |
 | Simulator reads its connection string from Key Vault | scripted (dry-run mode tested locally) | `realtime/simulator.py` `connection_string()`, `tests/unit/test_simulator.py` |
-| `nb_silver` reads the salt from Key Vault | demonstrated in cloud in pipeline runs started by Hamza (2026-11-23); not yet in a scheduled run | `src/gridpulse/lakehouse.py` `get_secret()`; `docs/evidence/fabric_batch.md` section 6 |
+| `nb_silver` reads the salt from Key Vault | demonstrated in cloud in pipeline runs started by Hamza (2026-11-23) and in the scheduled run of 2026-11-24 | `src/gridpulse/lakehouse.py` `get_secret()`; `docs/evidence/fabric_batch.md` section 6 |
 | No secrets in Git | demonstrated locally | `tests/unit/test_repo_hygiene.py` |
 | SQL sensitivity classifications on 5 columns | in place in cloud (applied by `load_sql.py --schema` on 2026-11-23) | `sql/001_schema.sql`; `docs/evidence/azure_foundation.md`, section 3. `[TODO after T2.2: portal screenshot]` |
 | Pseudonymisation in silver + `pii_absent` check | demonstrated in cloud | Fabric runs of 2026-11-23: `silver_customers_pseudo` 50 rows, `pii_absent` PASS (`docs/evidence/fabric_batch.md`, section 6); same result in the local run of 2026-11-22 |
