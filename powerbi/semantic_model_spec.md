@@ -255,8 +255,9 @@ Percent measures return fractions (0.034 shows as 3.4 %). The gold percent colum
   is tested and reused, and Direct Lake has limits on calculated objects.
 - No row-level security: the model holds no personal data. `customer_hash` is pseudonymous and
   hidden.
-- Personas: Admin Mohamed NACIR (workspace Admin), Data Engineer Hamza ZIOUINE (builds the model),
-  Analyst Omar MOUNABBIH (workspace Viewer, reads the report).
+- Personas as deployed on 2026-11-23: Hamza ZIOUINE workspace Admin (builds the model), Mohamed
+  NACIR workspace Member, Omar MOUNABBIH workspace Viewer (reads the report). `docs/security.md`
+  explains why Hamza is Admin and not Member as first designed.
 - Licences: creating or editing a semantic model or report needs Power BI Pro, PPU or the free
   60-day individual trial; Hamza and Omar start the trial the first time Fabric asks.
 - Viewer access to Direct Lake data: if Omar, as Viewer, gets a data access error on the report,
