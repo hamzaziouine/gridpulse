@@ -13,11 +13,11 @@ Owners: **Nacir** = Admin persona (subscription Owner, workspace Member). **Hamz
 
 ## 0. Fabric trial capacity (Nacir) (only if the workspace moves off the classmate's capacity)
 
-On 2026-11-23, Nacir's login (the one used for the deployment) saw only the 7 capacities that already existed on 11-06:
+On 2026-11-23, Nacir's login (the one used for the Azure deployment) saw only the 7 capacities that already existed on 11-06:
 - 6 FTL4 trials created between 10-19 and 10-22;
 - one PPU capacity.
 
-He is admin of none of them: the capacity admin API answered `PowerBINotAuthorizedException` for all 7. None of them is his, and the team rule is never to build on someone else's trial.
+He is admin of none of them: the capacity admin API answered `PowerBINotAuthorizedException` for all 7. None of them is his. The plan was to build only on a team member's trial. On 2026-11-23 we used one of the six FTL4 trials instead, a classmate's, because it was the only capacity open to us (`docs/evidence/fabric_batch.md`, section 1). `[TO CONFIRM: the capacity owner's agreement]`
 
 1. Sign in at https://app.fabric.microsoft.com with **the same account the CLI uses** (Nacir's UIR account), not a personal one.
 2. Click the account picture (top right) and look under **Trial status**:
@@ -56,7 +56,7 @@ The tenant offers the connection type `MicrosoftOutlook` with OAuth2 only, so no
 
 1. Fabric > Settings (gear) > **Manage connections and gateways** > **+ New** > **Cloud**.
 2. Connection name `con_outlook_alerts`, connection type **Office 365 Outlook**, authentication **OAuth 2.0** > **Edit credentials** > sign in with the account that will send the mail > **Create**.
-3. Rerun `powershell -File infra\fabric\deploy_fabric.ps1 -CapacityName "<trial name>"`. It now finds the connection and adds `mail_failure` to both pipelines.
+3. Rerun `powershell -File infra\fabric\deploy_fabric.ps1 -CapacityName "<trial name>" -SkipSchedule`. It now finds the connection and adds `mail_failure` to both pipelines. `-SkipSchedule` matters: the daily schedule already exists, and the rerun must not create a second one.
 4. Check the activity JSON, which was written from memory:
    - `fab export ws_gridpulse.Workspace/pl_daily_ingest.DataPipeline -o build/export -f`;
    - compare the `mail_failure` activity with `infra/fabric/gen_pipelines.py` `failure_path()`;

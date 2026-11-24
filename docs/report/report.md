@@ -27,10 +27,10 @@ Decisions supported:
 - spotting abnormal sites from live meter readings;
 - judging whether the day-ahead forecast can be trusted, against a simple baseline.
 
-What the solution consists of (the table below says what is tested locally and what still has to run in the cloud):
+What the solution consists of (the table below says where each result was measured):
 
 - Four heterogeneous sources: IESO hourly demand (CSV over HTTP), Open-Meteo weather forecasts (JSON over REST), reference data with customer PII in Azure SQL Database, and simulated smart-meter events.
-- A daily Data Factory pipeline into a bronze/silver/gold Lakehouse, with Spark notebooks and 17 data-quality checks per run.
+- A daily Data Factory pipeline into a bronze/silver/gold Lakehouse, with Spark notebooks and 17 data-quality checks per run, plus 4 on the Previous Runs weather.
 - A real-time path: Eventstream, Eventhouse, KQL queries, a Real-Time Dashboard and an Activator alert.
 - A Direct Lake Power BI report.
 - A LightGBM day-ahead forecast tracked in MLflow.
@@ -115,7 +115,7 @@ Non-functional requirements: cost under the $20 monthly budget alert; every reso
 
 | Minimum | GridPulse | Status |
 |---|---|---|
-| 2 or more heterogeneous sources | 4 (CSV over HTTP, JSON over REST, relational SQL, event stream) | sources pulled and generated locally |
+| 2 or more heterogeneous sources | 4 (CSV over HTTP, JSON over REST, relational SQL, event stream) | cloud: S1 to S3 landed in the Lakehouse by the pipelines (2026-11-23); S4: simulator tested locally in dry run only, no event sent to Fabric |
 | 1 or more batch pipeline | `pl_daily_ingest` (daily), `pl_backfill` (one-off) | cloud: deployed and run (backfill once, daily twice) |
 | 1 or more Lakehouse with documented layers | `lh_gridpulse`, bronze / silver / gold | cloud: `lh_gridpulse` with 7 bronze, 10 silver, 13 gold tables |
 | 1 or more Spark notebook writing Delta | `nb_bronze`, `nb_silver`, `nb_gold`, `nb_forecast`, `nb_predict` | cloud: all five ran in Fabric and wrote 30 Delta tables; locally with a Parquet stand-in |
@@ -393,11 +393,11 @@ Figures from the local gold tables, to check against the Fabric report before Om
 Full text: `docs/security.md` (to be merged into this section when the PDF is built). Summary:
 
 - Identities, as deployed on 2026-11-23 (`docs/evidence/rbac.md`): Admin = Nacir (subscription Owner, Key Vault Secrets Officer, workspace Member; no SQL Entra admin yet). Data Engineer = Hamza (RG Contributor + Resource Policy Contributor, Key Vault Secrets Officer, workspace Admin because he created it). Analyst = Omar (RG Reader, no Key Vault role, workspace Viewer). The Azure foundation was deployed from Hamza's laptop under Nacir's signed-in session before the other roles existed (`docs/security.md`, section 8.1). `[TO CONFIRM: Nacir's written agreement]`
-- Secrets: `sql-gpadmin-password`, `customer-hash-salt` and `es-meters-conn` in `kv-hz2611-cdda` (RBAC mode); read at run time by `load_sql.py`, `deploy_fabric.ps1`, `nb_silver` and the simulator. Nothing secret in Git, enforced by a repository test.
+- Secrets: `sql-gpadmin-password` and `customer-hash-salt` in `kv-hz2611-cdda` (RBAC mode), read at run time by `load_sql.py`, `deploy_fabric.ps1` and `nb_silver`. `es-meters-conn` for the simulator is planned and not created yet (it needs the Eventstream source). Nothing secret in Git, enforced by a repository test.
 - Classification: five PII columns classified in Azure SQL; PII only in SQL and `bronze_customers`; salted SHA-256 pseudonym from silver on; a DQ check fails the run if a PII column reaches silver. Purview scanning of Azure SQL and OneLake is designed, not built (no Purview account, no Fabric admin rights).
 - Policy: inherited allowed regions plus our two deny assignments that require the tags `project` and `owner`, with a live denial test (`policy_assignments.ps1 -Test`).
 - Encryption and network: TDE and Fabric encryption at rest by default; TLS 1.2 minimum on SQL; public endpoints with an SQL firewall, and why private endpoints are out of reach on a trial.
-- Monitoring and audit: activity log, Monitor hub, DQ table, pipeline failure mail, Activator alert, budget alerts; Key Vault and SQL audit logs designed but not enabled (cost).
+- Monitoring and audit: activity log, Monitor hub, DQ table and budget alerts are in place; the pipeline failure mail and the Activator alert are designed, not built yet; Key Vault and SQL audit logs are designed but not enabled (cost).
 - Known gaps, stated openly: the Engineer can read the SQL admin password; the pipeline's SQL connection uses the admin login; one Lakehouse puts bronze PII under the same workspace roles as gold.
 
 `[TODO after T8.1 to T8.7: evidence screenshots and outputs listed in docs/security.md section 8.8]`
@@ -434,7 +434,7 @@ Results of the cloud run (`nb_forecast` in `pl_backfill` on Fabric, data to 2026
 | Holdout, model frozen after 2025 | 2026-01-01 05:00 to 2026-11-22 23:00 | 7,819 | 2.815 % | 6.724 % | 58.1 % |
 | Backtest, retrained monthly | 2025-01-01 05:00 to 2026-11-22 23:00 | 16,577 | 2.546 % | 6.895 % | 63.1 % |
 
-These are the numbers of `nb_forecast` with its default `train_weather = matched` (section 9.4). Early stopping on 2025 chose 2,975 boosting rounds, close to the 3,000 cap, so the validation error was still falling slowly. That round count is reused in the backtest folds of 2025, so the 2025 backtest months are slightly optimistic; the 2026 months are the clean part of the backtest (monthly table in `docs/evidence/model_metrics.md`). Success criterion 6 (skill of at least 30 %) is met in both views, on historical data. July is the hardest month (3.54 % in 2025, 3.85 % in 2026): air-conditioning load follows temperature closely, so weather forecast error weighs most then. With the older setting (`train_weather = historical`, short-lead weather for training and scoring) the same notebook gave 2.70 % on the holdout and 2.45 % on the backtest; those figures were optimistic, because the weather they used was more accurate than the weather the daily forecast gets.
+Both tables come from `nb_forecast` with its default `train_weather = matched` (section 9.4). The details in the rest of this paragraph are from the local run. Early stopping on 2025 chose 2,975 boosting rounds, close to the 3,000 cap, so the validation error was still falling slowly. That round count is reused in the backtest folds of 2025, so the 2025 backtest months are slightly optimistic; the 2026 months are the clean part of the backtest (monthly table in `docs/evidence/model_metrics.md`). Success criterion 6 (skill of at least 30 %) is met on the holdout and on the backtest, locally and in the cloud, on historical data. July is the hardest month (3.54 % in 2025, 3.85 % in 2026): air-conditioning load follows temperature closely, so weather forecast error weighs most then. With the older setting (`train_weather = historical`, short-lead weather for training and scoring) the same notebook gave 2.70 % on the holdout and 2.45 % on the backtest; those figures were optimistic, because the weather they used was more accurate than the weather the daily forecast gets.
 
 ### 9.3 Tracking, registry and outputs
 
@@ -448,7 +448,7 @@ It then registers the model as `gridpulse_lgbm`. Predictions go to `gold_forecas
 
 ### 9.4 Limitations and monitoring needs
 
-- Weather lead time. In production the forecast for day T is fetched on T-1 at 13:15 UTC, 23 to 46 hours before the target hours. The Historical Forecast series keeps the newest model run for each hour (a lead of a few hours), so a model trained and scored on it looks better than it will be live. We measured the gap with the Open-Meteo Previous Runs API, which archives what the same model (GFS) forecast one day and two days before each hour (`scripts/backtest_weather_lead.py`, full tables in `docs/evidence/model_metrics.md`). That archive is complete for our 9 variables only from December 2024, so the check covers target days from 2024-12-08 to 2026-11-05. With the weather of day T replaced by the closest archived lead to the production lead (day 1 for HE1 to HE17, day 2 for HE18 to HE24). This is an approximation: day 1 means about 24 to 30 h of lead and stands for hours whose production lead is 23 to 39 h, so HE8 to HE17 are slightly optimistic and HE18 to HE24 slightly pessimistic. Scoring the retrained model with day 1 on every hour gives 2.85 %, with day 2 on every hour 3.04 %, which brackets the figure below:
+- Weather lead time. In production the forecast for day T is fetched on T-1 at 13:15 UTC, 23 to 46 hours before the target hours. The Historical Forecast series keeps the newest model run for each hour (a lead of a few hours), so a model trained and scored on it looks better than it will be live. We measured the gap with the Open-Meteo Previous Runs API, which archives what the same model (GFS) forecast one day and two days before each hour (`scripts/backtest_weather_lead.py`, full tables in `docs/evidence/model_metrics.md`). That archive is complete for our 9 variables only from December 2024, so the check covers target days from 2024-12-08 to 2026-11-05. The weather of day T is replaced by the closest archived lead to the production lead (day 1 for HE1 to HE17, day 2 for HE18 to HE24). This is an approximation: day 1 means about 24 to 30 h of lead and stands for hours whose production lead is 23 to 39 h, so HE8 to HE17 are slightly optimistic and HE18 to HE24 slightly pessimistic. Scoring the retrained model with day 1 on every hour gives 2.85 %, with day 2 on every hour 3.04 %, which brackets the figure below:
 
   | Evaluation | Naive MAPE | MAPE, short-lead weather | MAPE, production lead | Skill, production lead |
   |---|---|---|---|---|
@@ -458,7 +458,7 @@ It then registers the model as `gridpulse_lgbm`. Predictions go to `gold_forecas
 
   So the weather lead costs about 0.3 to 0.4 MAPE points for a model trained on short-lead weather, and with the longer day-2 lead on every hour that model reaches 3.19 % on the holdout. Summer suffers most (backtest, July 2026: 3.50 % with short-lead weather, 4.10 % with the production lead). Training on lead-matched weather recovers most of the gap, so this is now the production setting. That choice was made by comparing both settings on the 2026 holdout, so the holdout figure of the chosen setting is a selected number; the `live` rows are the only unbiased measure. The production setting: the pipelines copy the Previous Runs data (`cp_openmeteo_prevruns`, `fe_prevruns_months`), `nb_silver` builds `silver_weather_prevruns_ontario`, and `nb_forecast` trains and evaluates on lead-matched weather by default (`train_weather = matched`; the table in 9.2). Fallback, column by column: hours without a complete Previous Runs value keep the Historical Forecast value, which means every variable before 2024-01-19 and snowfall until 2024-12-06, and the last few hours of the newest day (the daily copy stops at the data day). Without the table at all, or with `train_weather = historical`, the notebook trains on Historical Forecast weather as before and says so in its output and in `gold_forecast.weather_source`.
 
-  Reproduction check (local run of 2026-11-23): the notebook's holdout is 2.90 % on 7,417 hours. On the same 7,411 hours as the backtest script it is 2.90 %, against 2.88 % for the script's retrained model. The features of the two paths are equal to within 3.4e-13 (Spark and numpy sum the city weights in a different order), but that is enough to move early stopping from 2,998 to 2,975 rounds near the flat end of the validation curve, hence the 0.02-point difference. All of this is still a backtest: the `live` rows in `gold_forecast` will give the real figure once the pipeline runs in Fabric.
+  Reproduction check (local run of 2026-11-23): the notebook's holdout is 2.90 % on 7,417 hours. On the same 7,411 hours as the backtest script it is 2.90 %, against 2.88 % for the script's retrained model. The features of the two paths are equal to within 3.4e-13 (Spark and numpy sum the city weights in a different order), but that is enough to move early stopping from 2,998 to 2,975 rounds near the flat end of the validation curve, hence the 0.02-point difference. All of this is still a backtest: the `live` rows in `gold_forecast` will give the real figure once IESO has published the actual demand for them (the first 24 were written in Fabric on 2026-11-23, for 2026-11-24).
 - No probabilistic output (a single median forecast).
 - Monitoring we would add in production: live MAPE against the backtest MAPE and against the naive baseline every week; feature drift with a population stability index on temperature and lagged demand (the approach used in GridCast); retraining monthly, or earlier when live skill drops below the baseline.
 - The model stays secondary to the data platform, as the brief asks: it consumes silver and writes gold like any other notebook.
@@ -589,16 +589,16 @@ Deliverable 7: `docs/resource_inventory.md` lists every planned Azure and Fabric
 
 ## Appendix A. Evidence still to collect
 
+Already in `docs/evidence/`: `azure_foundation.md` (Azure deployment, policy `-Test`, SQL load and classifications), `rbac.md` (roles as deployed), `fabric_batch.md` (Fabric items, run durations, DQ results, cloud model metrics), `idempotency.md` (two runs of the same date) and `model_metrics.md` (local model metrics).
+
 | Evidence | Task | Report section |
 |---|---|---|
-| `docs/evidence/rbac.md` (role assignments, workspace roles) | T8.1 | 8 |
 | Omar's 403 on Key Vault, Viewer access test on `bronze_customers` | T8.2 | 8 |
-| `docs/evidence/azure_foundation.md` (`-Test` output, section 2) | T8.5 | 8 |
-| SQL classification screenshot and query | T2.2 | 3, 8 |
-| Pipeline run screenshots, `docs/evidence/idempotency.md` | T3.3, T3.4 | 5 |
+| SQL classification screenshot | T2.2 | 3, 8 |
+| Pipeline run screenshots (Monitor hub); result of the first scheduled run in `docs/evidence/idempotency.md`, section 4 | T3.3, T3.4 | 5 |
 | Failure mail screenshot | T3.6 | 8 |
-| Fabric DQ results and notebook timings | T4.1, T4.2 | 3, 5 |
-| `docs/evidence/model_metrics.md`, MLflow screenshots | T5.1 | 9 |
+| Lakehouse table list and notebook snapshot screenshots | T4.2 | 5 |
+| MLflow screenshots in Fabric; live MAPE once actual demand is published | T5.1 | 9 |
 | `docs/evidence/realtime_latency.md`, dashboard and alert screenshots | T6.4 to T6.6 | 6 |
 | Report page screenshots, PBIX | T7.2, T7.6 | 7 |
 | OneLake catalog Govern view | T8.6 | 8 |

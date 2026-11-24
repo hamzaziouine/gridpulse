@@ -45,4 +45,5 @@ of 6):
   `test_calendar_baselines.py`, and the fixtures marked "via GridCast" in `tests/fixtures/README.md`.
 
 New in GridPulse: every Azure and Fabric part (pipelines, Lakehouse medallion layers, Spark
-notebooks, Key Vault, SQL source, policies, roles), the real-time path, pseudonymisation, and the lead-matched training on Previous Runs weather.
+notebooks, Key Vault, SQL source, policies, roles), the real-time path, pseudonymisation, and the
+lead-matched training on Previous Runs weather.

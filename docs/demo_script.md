@@ -2,7 +2,7 @@
 
 Follows the 7 steps of the brief, section 7. Target length 13 minutes, which leaves 2 minutes of slack inside the 15. Every member drives at least one step, as the rubric's "balanced group participation" asks.
 
-Status 2026-11-22: nothing is deployed in Fabric yet, so every timing and expected screen below is a plan. Times marked `[TODO]` get measured in rehearsal 1 (PLAN T11.4).
+Status 2026-11-23: the batch path runs in Fabric (steps 1 to 3; `docs/evidence/fabric_batch.md`). The real-time path, the Power BI report and the persona checks are not built or not tested yet, so steps 4 to 6 are still a plan. No rehearsal has happened. Times marked `[TODO]` get measured in rehearsal 1 (PLAN T11.4).
 
 | Step | Brief item | Owner | Time | Clock |
 |---|---|---|---|---|
@@ -21,15 +21,15 @@ Persona rule during the demo: each member works in their own browser profile sig
 The day before:
 
 - [ ] Rehearsal done; fallback video recorded (PLAN T11.2) and copied to the laptop, so it plays without network. One screenshot per step in `docs/evidence/demo/`.
-- [ ] Nacir's trial capacity is active and not paused; `ws_gridpulse` opens for all three accounts.
+- [ ] The trial capacity under `ws_gridpulse` (a classmate's, `docs/evidence/fabric_batch.md`, section 1) is still active; `ws_gridpulse` opens for all three accounts.
 - [ ] Omar's workspace role is back to Viewer (he was Contributor while building the report) and his Power BI trial is still active.
-- [ ] `powershell -File infra\azure\policy_assignments.ps1 -Test` run once: the output must say "DENIED by policy, as expected". Saved in `docs/evidence/policy.md` as the fallback.
+- [ ] `powershell -File infra\azure\policy_assignments.ps1 -Test` run once: the output must say "DENIED by policy, as expected". The output of 2026-11-23 is in `docs/evidence/azure_foundation.md`, section 2, as the fallback.
 
 60 minutes before:
 
 - [ ] Laptop on the charger. Phone hotspot tested. The simulator talks AMQP over TLS (port 5671); if the campus network blocks that port, switch to the hotspot, because the simulator has no WebSocket option yet.
 - [ ] Three browser profiles signed in at `app.fabric.microsoft.com`: Hamza, Nacir, Omar. Azure portal open in Nacir's profile.
-- [ ] Terminal in `C:\Users\ultra pc\dev\gridpulse`: `az account show --query user.name` prints Hamza's UIR account; `fab auth status` shows Hamza.
+- [ ] Terminal in the repository folder: `az account show --query user.name` prints Hamza's UIR account; `fab auth status` shows Hamza.
 
 45 minutes before:
 
@@ -42,7 +42,7 @@ The day before:
 - [ ] Start the simulator. It reads the Eventstream connection string from Key Vault with the signed-in `az` identity:
 
 ```powershell
-cd "C:\Users\ultra pc\dev\gridpulse"
+cd <repository folder>
 uv run python realtime/simulator.py --kv-url https://kv-hz2611-cdda.vault.azure.net --kv-secret es-meters-conn --rate 10
 ```
 
@@ -97,8 +97,8 @@ Fallback: screenshots `docs/evidence/demo/01_*.png`.
 fab job start ws_gridpulse.Workspace/pl_daily_ingest.DataPipeline
 ```
 
-3. The copy activities turn green within seconds `[TODO after T3.3: real copy durations]`. Switch to the Monitor hub: the run in progress, and the run of 45 minutes ago, all green, with its duration per activity.
-4. One sentence on repeatability: "nb_bronze replaces the rows of the files it re-reads, and silver and gold are recomputed and overwritten, so running the same day twice gives the same row counts." `[TODO after T3.4: docs/evidence/idempotency.md with counts before and after a second run]`
+3. The four HTTP copies turn green in about 20 s and the three SQL copies in about 80 s (run 2 of 2026-11-23, `docs/evidence/fabric_batch.md`, section 5). Switch to the Monitor hub: the run in progress, and the run of 45 minutes ago, all green, with its duration per activity.
+4. One sentence on repeatability: "nb_bronze replaces the rows of the files it re-reads, and silver and gold are recomputed and overwritten, so running the same day twice gives the same row counts." Evidence: `docs/evidence/idempotency.md` (two runs for 2026-11-23, 30 tables, identical counts).
 5. Show the schedule: daily at 13:15 UTC, which is 08:15 EST, after IESO publishes the previous day.
 
 Fallback: screenshot of the pipeline canvas and of the Monitor hub with the earlier green run.
@@ -167,7 +167,7 @@ Question 1: "When do demand peaks happen, and how high are they?" Page Peaks: ho
 
 Question 2: "How strongly does temperature drive demand?" Page Weather sensitivity: demand against temperature, yearly slopes. Expected answer from the local run: on the cooling side demand rises by about 570 to 730 MW per °C above 20 °C depending on the year (2019 to 2026), on the heating side by about 160 to 200 MW per °C below 15 °C. Per degree, a hot day costs the grid three to four times more than a cold one. He uses the year and season slicers once to show the interaction.
 
-If time allows, page Forecast vs actual: model MAPE against seasonal-naive MAPE (local run: holdout 2026 MAPE 2.90 % against 6.84 % for the naive baseline, with weather of the production lead time; quote the Fabric figures once T5.1 has run).
+If time allows, page Forecast vs actual: model MAPE against seasonal-naive MAPE (local run: holdout 2026 MAPE 2.90 % against 6.84 % for the naive baseline, with weather of the production lead time; cloud run of 2026-11-23, data to 2026-11-22: 2.815 % against 6.724 %).
 
 Fallback: the report screenshots, or the downloaded PBIX opened in Power BI Desktop.
 
@@ -207,10 +207,10 @@ Fallback: `docs/evidence/azure_foundation.md`, section 2 (saved output of the sa
    Direct Lake reads the gold Delta files directly: no second copy and no refresh step, so a pipeline run shows in the report straight away. Import would need a scheduled refresh after every run and would duplicate the data. If a gold table outgrew the SKU's Direct Lake limits, we would pre-aggregate it or move up a SKU.
 
 5. How do you know a rerun does not duplicate data?
-   `nb_bronze` replaces the rows of the files it re-reads (Delta `replaceWhere` on `source_file`); `nb_silver` and `nb_gold` recompute their tables and overwrite them; silver keeps one row per hour (newest IESO file wins), and the DQ check `unique_target_time` fails the run if a duplicate appears. Evidence: two runs for the same date give identical counts `[TODO after T3.4]`.
+   `nb_bronze` replaces the rows of the files it re-reads (Delta `replaceWhere` on `source_file`); `nb_silver` and `nb_gold` recompute their tables and overwrite them; silver keeps one row per hour (newest IESO file wins), and the DQ check `unique_target_time` fails the run if a duplicate appears. Evidence: two runs for the same date gave identical counts in all 30 tables (`docs/evidence/idempotency.md`). The first scheduled run on a new date is still pending.
 
 6. How do you avoid leakage in the forecast, and why a seasonal-naive baseline?
-   The forecast is issued at 08:15 EST on day D for the 24 hours of D+1. At that time IESO has published demand up to D-1, so every demand feature is at least 48 hours old, and a unit test changes all demand from D on and checks that no feature moves. Weather of the target day comes from the Open-Meteo Previous Runs API, the forecast made one or two days before each hour, which matches the lead the model gets at 08:15 the day before; before 2024 that archive is incomplete, so older years fall back to the Historical Forecast API (short lead). Trained and scored that way, the 2026 holdout MAPE is 2.90 %; the older short-lead setting gave 2.70 %, which was optimistic (3.07 % when rescored with production-lead weather). The live rows will measure the real error. The split is by time (train 2019 to 2024, early stopping on 2025, test 2026) plus a monthly rolling backtest from January 2025. The baseline is the same hour one week earlier, the usual simple benchmark for hourly load, and it is known at issue time. Results: (local run: holdout 2026 MAPE 2.90 % against 6.84 % for the naive baseline; quote the Fabric figures once T5.1 has run).
+   The forecast is issued at 08:15 EST on day D for the 24 hours of D+1. At that time IESO has published demand up to D-1, so every demand feature is at least 48 hours old, and a unit test changes all demand from D on and checks that no feature moves. Weather of the target day comes from the Open-Meteo Previous Runs API, the forecast made one or two days before each hour, which matches the lead the model gets at 08:15 the day before; before 2024 that archive is incomplete, so older years fall back to the Historical Forecast API (short lead). Trained and scored that way, the 2026 holdout MAPE is 2.90 %; the older short-lead setting gave 2.70 %, which was optimistic (3.07 % when rescored with production-lead weather). The live rows will measure the real error. The split is by time (train 2019 to 2024, early stopping on 2025, test 2026) plus a monthly rolling backtest from January 2025. The baseline is the same hour one week earlier, the usual simple benchmark for hourly load, and it is known at issue time. Results: local run, holdout 2026 MAPE 2.90 % against 6.84 % for the naive baseline; cloud run of 2026-11-23 (data to 2026-11-22), 2.815 % against 6.724 %.
 
 7. Why is the SQL server open to all Azure services, and why no private endpoints?
    The Fabric copy activity runs on shared infrastructure with no fixed IP we could allow on a trial. The rule only opens the login step; SQL authentication is still needed. Private endpoints need a virtual network plus a data gateway or Fabric managed private endpoints, which cost money and need admin rights we do not have. In production we would close public access and use private endpoints.

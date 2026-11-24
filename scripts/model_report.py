@@ -141,7 +141,8 @@ def main() -> None:
         f"Generated {datetime.now(UTC):%Y-%m-%d %H:%M} UTC by `scripts/model_report.py` from the",
         "gold tables written by `fabric/nb_forecast.Notebook` when run on a laptop through",
         "`scripts/run_local.py` (local Spark 3.5, real IESO and Open-Meteo data 2019 to 2026).",
-        "**Tested locally only**: the same notebook has not run in Fabric yet.",
+        "**Local figures**: this file is the laptop run. The same notebook also ran in Fabric on "
+        "2026-11-23; the cloud figures are in `docs/evidence/fabric_batch.md`, section 7.",
         "",
         f"MLflow run `{run_id}` (local file store `mlruns/`), registered model "
         f"`gridpulse_lgbm` version {version}.",

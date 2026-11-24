@@ -3,7 +3,7 @@
 Generated 2026-11-23 01:51 UTC by `scripts/model_report.py` from the
 gold tables written by `fabric/nb_forecast.Notebook` when run on a laptop through
 `scripts/run_local.py` (local Spark 3.5, real IESO and Open-Meteo data 2019 to 2026).
-**Tested locally only**: the same notebook has not run in Fabric yet.
+**Local figures**: this file is the laptop run. The same notebook also ran in Fabric on 2026-11-23; the cloud figures are in `docs/evidence/fabric_batch.md`, section 7.
 
 MLflow run `078e123504194c85b17c4ecd0f901311` (local file store `mlruns/`), registered model `gridpulse_lgbm` version 2.
 
